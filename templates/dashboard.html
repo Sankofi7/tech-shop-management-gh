@@ -10,15 +10,27 @@
   <section class="summary-grid" aria-label="Business summary">
     <article class="summary-card">
       <div class="summary-icon icon-blue"><i class="bi bi-cash-stack"></i></div>
-      <div class="summary-label">{% if is_manager %}Sales today{% else %}Your sales today{% endif %}</div>
+      <div class="summary-label">{% if is_manager %}Sales revenue today{% else %}Your sales revenue today{% endif %}</div>
       <div class="summary-value">GH₵{{ today_sales_total|floatformat:2 }}</div>
-      <div class="summary-note">{{ today_sales_count }} approved sale{{ today_sales_count|pluralize }} today</div>
+      <div class="summary-note">{{ today_sales_count }} approved sale{{ today_sales_count|pluralize }} by sale date</div>
+    </article>
+    <article class="summary-card">
+      <div class="summary-icon icon-green"><i class="bi bi-wallet2"></i></div>
+      <div class="summary-label">{% if is_manager %}Payments received today{% else %}Your payments received today{% endif %}</div>
+      <div class="summary-value">GH₵{{ payments_received_today|floatformat:2 }}</div>
+      <div class="summary-note">Confirmed payments by confirmation date</div>
     </article>
     <article class="summary-card">
       <div class="summary-icon icon-violet"><i class="bi bi-person-lines-fill"></i></div>
-      <div class="summary-label">{% if is_manager %}Outstanding debt{% else %}Your outstanding credit{% endif %}</div>
+      <div class="summary-label">{% if is_manager %}Outstanding debts{% else %}Your outstanding debts{% endif %}</div>
       <div class="summary-value">GH₵{{ outstanding_debt|floatformat:2 }}</div>
       <div class="summary-note">Approved credit less confirmed payments</div>
+    </article>
+    <article class="summary-card">
+      <div class="summary-icon icon-violet"><i class="bi bi-receipt"></i></div>
+      <div class="summary-label">Expenses</div>
+      <div class="summary-value summary-unavailable">Not yet available</div>
+      <div class="summary-note">Expense tracking has not been implemented</div>
     </article>
     {% if low_stock_alert_enabled %}<article class="summary-card">
       <div class="summary-icon icon-amber"><i class="bi bi-exclamation-triangle"></i></div>
@@ -36,7 +48,7 @@
 
   <section class="panel-card performance-panel" aria-labelledby="sales-performance-title">
     <div class="panel-header">
-      <div><h2 id="sales-performance-title">Sales performance</h2><p>{% if is_manager %}Approved sales over the last seven days{% else %}Your approved sales over the last seven days{% endif %}</p></div>
+      <div><h2 id="sales-performance-title">Sales performance</h2><p>{% if is_manager %}Approved sales by sale date over the last seven days{% else %}Your approved sales by sale date over the last seven days{% endif %}</p></div>
       <span class="panel-icon"><i class="bi bi-bar-chart-line"></i></span>
     </div>
     <div class="chart-empty-note" {% if chart_has_sales %}hidden{% endif %}>No approved sales recorded during this seven-day period.</div>

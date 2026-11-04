@@ -10,7 +10,7 @@ from apps.audit.models import AuditEvent, record_audit_event
 from apps.customers.services import create_customer
 from apps.products.models import Category, InventoryMovement, MovementType, Product
 from apps.products.services import record_stock_movement
-from apps.sales.models import PaymentMethod, PaymentStatus, SaleStatus, SaleType
+from apps.sales.models import Payment, PaymentMethod, PaymentStatus, SaleStatus, SaleType
 from apps.sales.services import approve_sale, confirm_momo_payment, create_sale, record_payment, reject_sale
 
 
@@ -97,6 +97,13 @@ class ReportsTests(TestCase):
             sale=sale, user=self.secretary, amount=Decimal("300.00"), method=PaymentMethod.MTN_MOMO,
             momo_reference="REPORT-MOMO-PENDING",
         )
+        rejected_payment = record_payment(
+            sale=sale, user=self.secretary, amount=Decimal("200.00"), method=PaymentMethod.MTN_MOMO,
+            momo_reference="REPORT-MOMO-REJECTED",
+        )
+        from apps.sales.services import reject_momo_payment
+
+        reject_momo_payment(payment=rejected_payment, user=self.owner, reason="Reference not found")
         self.client.force_login(self.owner)
         response = self.client.get("/reports/payments/")
         self.assertEqual(response.status_code, 200)
@@ -106,13 +113,69 @@ class ReportsTests(TestCase):
         self.assertEqual(response.context["pending_total"], Decimal("300.00"))
         self.assertEqual(response.context["pending_count"], 1)
         self.assertContains(response, "REPORT-MOMO-PENDING")
+        self.assertNotContains(response, "REPORT-MOMO-REJECTED")
         self.assertContains(response, "CONFIRM-REPORT-1")
+
+    def test_confirmed_payment_reports_use_confirmation_date_not_record_date(self):
+        sale = self.make_credit_sale(self.employee)
+        approve_sale(sale=sale, user=self.secretary)
+        recorded_field = Payment._meta.get_field("recorded_at")
+        previous_default = recorded_field.default
+        recorded_field.default = lambda: timezone.now() - timedelta(days=1)
+        recorded_field.__dict__.pop("_get_default", None)
+        try:
+            payment = record_payment(
+                sale=sale, user=self.employee, amount=Decimal("750.00"),
+                method=PaymentMethod.MTN_MOMO, momo_reference="CONFIRM-DATE-TEST",
+            )
+        finally:
+            recorded_field.default = previous_default
+            recorded_field.__dict__.pop("_get_default", None)
+        confirm_momo_payment(
+            payment=payment, user=self.secretary, confirmation_reference="CONFIRMED-TODAY-TEST",
+        )
+
+        today = timezone.localdate()
+        self.client.force_login(self.owner)
+        response = self.client.get("/reports/payments/", {
+            "period": "custom", "date_from": today.isoformat(), "date_to": today.isoformat(),
+        })
+        self.assertEqual(response.context["confirmed_total"], Decimal("750.00"))
+        self.assertEqual(response.context["daily_data"][0]["date"], today.isoformat())
+        self.assertEqual(response.context["daily_data"][0]["amount"], "750.00")
+        row = response.context["payments"][0]
+        self.assertEqual(row.recorded_at.date(), today - timedelta(days=1))
+        self.assertEqual(row.decided_at.date(), today)
+
+        home = self.client.get("/reports/")
+        self.assertEqual(home.context["received_today_total"], Decimal("750.00"))
+
+    def test_multiline_sale_is_not_duplicated_in_sales_or_payment_totals(self):
+        sale = create_sale(
+            user=self.employee, sale_type=SaleType.CASH,
+            lines=[{"product": self.product, "quantity": 1}, {"product": self.product, "quantity": 1}],
+            initial_payment={"amount": Decimal("10000.00"), "method": PaymentMethod.CASH},
+        )
+        self.client.force_login(self.owner)
+        today = timezone.localdate()
+        sales = self.client.get("/reports/sales/", {
+            "period": "custom", "date_from": today.isoformat(), "date_to": today.isoformat(),
+        })
+        payments = self.client.get("/reports/payments/", {
+            "period": "custom", "date_from": today.isoformat(), "date_to": today.isoformat(),
+        })
+        self.assertEqual(sales.context["sales_count"], 1)
+        self.assertEqual(sales.context["sales_total"], Decimal("10000.00"))
+        self.assertEqual(payments.context["confirmed_total"], Decimal("10000.00"))
+        self.assertEqual(sale.items.count(), 2)
 
     def test_credit_report_reuses_customer_debt_calculation_and_lists_paid_and_pending(self):
         partial = self.make_credit_sale(initial_amount="1200.00")
         paid = self.make_credit_sale()
         record_payment(sale=paid, user=self.secretary, amount=Decimal("5000.00"), method=PaymentMethod.CASH)
         pending = self.make_credit_sale(self.employee)
+        rejected = self.make_credit_sale(self.employee)
+        reject_sale(sale=rejected, user=self.owner, reason="Credit terms declined")
         self.client.force_login(self.owner)
         response = self.client.get("/reports/credit/")
         self.assertEqual(response.status_code, 200)
@@ -120,6 +183,7 @@ class ReportsTests(TestCase):
         self.assertEqual(response.context["paid_total"], Decimal("6200.00"))
         self.assertEqual(response.context["outstanding"], Decimal("3800.00"))
         self.assertEqual(response.context["pending_count"], 1)
+        self.assertNotContains(response, rejected.reference)
         self.assertEqual(list(response.context["paid_sales"]), [paid])
         self.assertNotEqual(partial.status, SaleStatus.PENDING_APPROVAL)
         self.assertEqual(pending.status, SaleStatus.PENDING_APPROVAL)
@@ -205,3 +269,23 @@ class ReportsTests(TestCase):
         self.assertEqual(employee_home.status_code, 200)
         self.assertNotContains(employee_home, "Credit & debt")
         self.assertNotContains(employee_home, "Employee performance")
+
+    def test_reports_overview_scopes_company_totals_to_managers_and_employee_totals_to_self(self):
+        self.make_cash_sale(self.employee)
+        self.make_cash_sale(self.other_employee)
+        credit_sale = self.make_credit_sale(self.employee)
+        approve_sale(sale=credit_sale, user=self.secretary)
+        record_payment(sale=credit_sale, user=self.employee, amount=Decimal("1000.00"), method=PaymentMethod.CASH)
+
+        for manager in (self.owner, self.secretary):
+            self.client.force_login(manager)
+            response = self.client.get("/reports/")
+            self.assertEqual(response.context["sales_today_total"], Decimal("15000.00"))
+            self.assertEqual(response.context["received_today_total"], Decimal("11000.00"))
+            self.assertEqual(response.context["outstanding_debt"], Decimal("4000.00"))
+
+        self.client.force_login(self.employee)
+        response = self.client.get("/reports/")
+        self.assertEqual(response.context["sales_today_total"], Decimal("10000.00"))
+        self.assertEqual(response.context["received_today_total"], Decimal("6000.00"))
+        self.assertNotIn("outstanding_debt", response.context)

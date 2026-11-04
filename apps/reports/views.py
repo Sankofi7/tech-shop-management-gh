@@ -89,7 +89,8 @@ def _daily_series(queryset, date_field, sum_field, start, end):
     points = []
     cursor = start
     while cursor <= end:
-        points.append({"date": cursor.isoformat(), "label": cursor.strftime("%b %-d"), "amount": str(grouped.get(cursor, ZERO))})
+        amount = Decimal(grouped.get(cursor) or ZERO).quantize(Decimal("0.01"))
+        points.append({"date": cursor.isoformat(), "label": cursor.strftime("%b %-d"), "amount": str(amount)})
         cursor += timedelta(days=1)
     maximum = max((Decimal(point["amount"]) for point in points), default=ZERO)
     for point in points:
@@ -106,7 +107,7 @@ def reports_home(request):
     today = timezone.localdate()
     sales_today = sales.filter(created_at__date=today)
     paid_today = Payment.objects.filter(
-        sale__in=sales, status=PaymentStatus.CONFIRMED, recorded_at__date=today,
+        sale__in=sales, status=PaymentStatus.CONFIRMED, decided_at__date=today,
     )
     context = {
         "page_title": "Reports & analytics", "is_manager": is_manager,
@@ -154,7 +155,7 @@ def sales_report(request):
         row["percent"] = round(100 * row["total"] / maximum_employee) if maximum_employee else 0
     if request.GET.get("format") == "csv":
         rows = sales.order_by("created_at").values_list("reference", "created_at", "created_by__username", "sale_type", "total")
-        return _csv_download("sales-report.csv", ("Sale reference", "Date", "Employee", "Sale type", "Approved sale value GHS"), rows)
+        return _csv_download("sales-report.csv", ("Sale reference", "Sale date", "Employee", "Sale type", "Approved sale value GHS"), rows)
     return render(request, "reports/sales.html", {
         "page_title": "Sales report", "form": form, "start": start, "end": end,
         "sales": sales.order_by("-created_at")[:50], "sales_count": totals["count"],
@@ -179,7 +180,7 @@ def payments_report(request):
     confirmed = period_payments.filter(status=PaymentStatus.CONFIRMED)
     pending = period_payments.filter(status=PaymentStatus.PENDING_CONFIRMATION, method=PaymentMethod.MTN_MOMO)
     method_totals = {row["method"]: row["total"] for row in confirmed.values("method").annotate(total=Sum("amount"))}
-    daily_data = _daily_series(confirmed, "recorded_at", "amount", start, end)
+    daily_data = _daily_series(confirmed, "decided_at", "amount", start, end)
     method_chart = [
         {"label": PaymentMethod.CASH.label, "amount": str(method_totals.get(PaymentMethod.CASH, ZERO)), "key": "cash"},
         {"label": PaymentMethod.MTN_MOMO.label, "amount": str(method_totals.get(PaymentMethod.MTN_MOMO, ZERO)), "key": "momo"},
@@ -190,14 +191,14 @@ def payments_report(request):
     if request.GET.get("format") == "csv":
         if request.user.role in MANAGER_ROLES:
             rows = period_payments.exclude(status=PaymentStatus.REJECTED).order_by("recorded_at").values_list(
-                "payment_reference", "recorded_at", "sale__reference", "method", "amount", "status", "momo_reference", "confirmation_reference"
+                "payment_reference", "recorded_at", "decided_at", "sale__reference", "method", "amount", "status", "momo_reference", "confirmation_reference"
             )
-            headers = ("Payment reference", "Recorded at", "Sale reference", "Method", "Amount GHS", "Status", "MoMo transaction reference", "Confirmation reference")
+            headers = ("Payment reference", "Recorded at", "Confirmed at", "Sale reference", "Method", "Amount GHS", "Status", "MoMo transaction reference", "Confirmation reference")
         else:
             rows = period_payments.exclude(status=PaymentStatus.REJECTED).order_by("recorded_at").values_list(
-                "recorded_at", "sale__reference", "method", "amount", "status"
+                "recorded_at", "decided_at", "sale__reference", "method", "amount", "status"
             )
-            headers = ("Recorded at", "Sale reference", "Method", "Amount GHS", "Status")
+            headers = ("Recorded at", "Confirmed at", "Sale reference", "Method", "Amount GHS", "Status")
         return _csv_download("payment-report.csv", headers, rows)
     return render(request, "reports/payments.html", {
         "page_title": "Payment report", "form": form, "start": start, "end": end,

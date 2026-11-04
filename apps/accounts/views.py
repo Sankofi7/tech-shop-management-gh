@@ -12,8 +12,9 @@ from apps.accounts.notifications import dashboard_notifications
 from apps.accounts.permissions import role_required
 from apps.audit.models import AuditEvent
 from apps.customers.models import Customer
+from apps.customers.services import credit_totals
 from apps.products.models import Product
-from apps.sales.models import Payment, PaymentStatus, Sale, SaleType
+from apps.sales.models import Payment, PaymentStatus, Sale
 from apps.shop_settings.models import ShopProfile
 
 
@@ -54,12 +55,15 @@ def dashboard(request):
     today_total = today_totals["total"] if today_totals["total"] is not None else ZERO_MONEY
     today_count = today_totals["count"]
 
-    credit_sales = sales_scope.filter(sale_type=SaleType.CREDIT)
-    credit_totals = credit_sales.aggregate(total=Sum("total"))["total"]
-    confirmed_payments = Payment.objects.filter(
-        sale__in=credit_sales, status=PaymentStatus.CONFIRMED
-    ).aggregate(total=Sum("amount"))["total"]
-    outstanding_debt = (credit_totals or ZERO_MONEY) - (confirmed_payments or ZERO_MONEY)
+    _, _, _, outstanding_debt = credit_totals(sales_scope)
+
+    payments_today = Payment.objects.filter(
+        sale__in=sales_scope,
+        status=PaymentStatus.CONFIRMED,
+        decided_at__gte=today_start,
+        decided_at__lt=tomorrow_start,
+    )
+    payments_received_today = payments_today.aggregate(total=Sum("amount"))["total"] or ZERO_MONEY
 
     daily_totals = {
         row["sale_day"]: row["total"]
@@ -113,6 +117,7 @@ def dashboard(request):
         "active_customer_count": active_customer_count,
         "today_sales_total": today_total,
         "today_sales_count": today_count,
+        "payments_received_today": payments_received_today,
         "outstanding_debt": outstanding_debt,
         "chart_data": chart_data,
         "chart_has_sales": any(Decimal(point["amount"]) > 0 for point in chart_data),

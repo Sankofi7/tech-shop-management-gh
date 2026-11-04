@@ -9,7 +9,7 @@ from apps.customers.models import Customer
 from apps.customers.services import create_customer
 from apps.products.models import Category, Product
 from apps.sales.models import Payment, PaymentMethod, PaymentStatus, Sale, SaleStatus, SaleType
-from apps.sales.services import approve_sale, create_sale, record_payment
+from apps.sales.services import approve_sale, confirm_momo_payment, create_sale, record_payment, reject_momo_payment
 
 from .admin import UserAdmin
 from .models import Role
@@ -375,10 +375,45 @@ class FrontendAuthenticationAndDashboardTests(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.context["today_sales_total"], 400)
         self.assertEqual(response.context["today_sales_count"], 2)
+        self.assertContains(response, "Expenses")
+        self.assertContains(response, "Not yet available")
+        self.assertNotContains(response, "Expenses</div><div class=\"summary-value\">GH₵0.00")
+        self.assertNotIn("expenses_total", response.context)
         self.client.force_login(self.employee)
         response = self.client.get("/")
         self.assertEqual(response.context["today_sales_total"], 200)
         self.assertEqual(response.context["today_sales_count"], 1)
+
+    def test_dashboard_separates_sale_revenue_from_confirmed_payments_received(self):
+        self._sale(self.employee)
+        self._sale(self.other_employee)
+        approved_credit = self._sale(self.employee, sale_type=SaleType.CREDIT)
+        record_payment(sale=approved_credit, user=self.employee, amount="25.00", method=PaymentMethod.CASH)
+        confirmed_momo = record_payment(
+            sale=approved_credit, user=self.employee, amount="15.00", method=PaymentMethod.MTN_MOMO,
+            momo_reference="DASHBOARD-CONFIRMED-MOMO",
+        )
+        confirm_momo_payment(payment=confirmed_momo, user=self.secretary, confirmation_reference="CONFIRMED-TODAY")
+        rejected_momo = record_payment(
+            sale=approved_credit, user=self.employee, amount="10.00", method=PaymentMethod.MTN_MOMO,
+            momo_reference="DASHBOARD-REJECTED-MOMO",
+        )
+        reject_momo_payment(payment=rejected_momo, user=self.secretary, reason="Reference not found")
+        record_payment(
+            sale=approved_credit, user=self.employee, amount="5.00", method=PaymentMethod.MTN_MOMO,
+            momo_reference="DASHBOARD-PENDING-MOMO-2",
+        )
+
+        self.client.force_login(self.owner)
+        owner_response = self.client.get("/")
+        self.assertEqual(owner_response.context["today_sales_total"], 600)
+        self.assertEqual(owner_response.context["payments_received_today"], 440)
+        self.assertContains(owner_response, "Confirmed payments by confirmation date")
+
+        self.client.force_login(self.employee)
+        employee_response = self.client.get("/")
+        self.assertEqual(employee_response.context["today_sales_total"], 400)
+        self.assertEqual(employee_response.context["payments_received_today"], 240)
 
     def test_outstanding_debt_uses_approved_credit_and_confirmed_payments_only_once(self):
         approved = self._sale(self.employee, sale_type=SaleType.CREDIT)
@@ -456,4 +491,4 @@ class FrontendAuthenticationAndDashboardTests(TestCase):
         self.assertNotContains(response, "secret-payment-reference")
         self.assertNotContains(response, "secret-detail")
         self.assertNotContains(response, "frontend-other")
-        self.assertContains(response, "Your sales today")
+        self.assertContains(response, "Your sales revenue today")
