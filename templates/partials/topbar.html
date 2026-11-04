@@ -1,0 +1,36 @@
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="mobile-menu-toggle" type="button" aria-label="Open navigation" aria-controls="app-sidebar" aria-expanded="false" data-sidebar-toggle><i class="bi bi-list"></i></button>
+    <div class="topbar-crumb"><span>Workspace</span><i class="bi bi-chevron-right"></i><strong>{{ page_title|default:"Dashboard" }}</strong></div>
+  </div>
+  <div class="topbar-actions">
+    <form class="global-search" role="search" onsubmit="return false">
+      <i class="bi bi-search"></i><input type="search" aria-label="Search" placeholder="Search anything…" disabled><kbd>⌘ K</kbd>
+    </form>
+    <div class="dropdown notification-dropdown">
+      <button class="topbar-icon notification-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Notifications, {{ notification_total }} alert{{ notification_total|pluralize }}">
+        <i class="bi bi-bell"></i>{% if notification_total %}<span class="notification-count">{{ notification_total }}</span>{% endif %}
+      </button>
+      <div class="dropdown-menu dropdown-menu-end notification-menu">
+        <div class="notification-menu-heading"><strong>Notifications</strong><span>{{ notification_total }} alert{{ notification_total|pluralize }}</span></div>
+        <div class="dropdown-divider"></div>
+        {% for item in notification_items %}
+          <a class="notification-item" href="{{ item.url }}"><span class="notification-item-icon"><i class="bi {{ item.icon }}"></i></span><span class="notification-item-copy"><strong>{{ item.label }}</strong><small>{% if item.count %}{{ item.count }} needs attention{% else %}No items need attention{% endif %}</small></span><span class="notification-item-count">{{ item.count }}</span></a>
+        {% empty %}
+          <p class="notification-empty">No notifications are available.</p>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="dropdown">
+      <button class="user-menu dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <span class="avatar">{{ user.get_full_name|default:user.username|first|upper }}</span>
+        <span class="user-menu-copy"><strong>{{ user.get_full_name|default:user.username }}</strong><small>{{ user.get_role_display }}</small></span>
+      </button>
+      <div class="dropdown-menu dropdown-menu-end user-dropdown">
+        <div class="dropdown-user"><strong>{{ user.get_full_name|default:user.username }}</strong><span>{{ user.username }} · {{ user.get_role_display }}</span></div>
+        <div class="dropdown-divider"></div>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="dropdown-item text-danger" type="submit"><i class="bi bi-box-arrow-right"></i> Sign out</button></form>
+      </div>
+    </div>
+  </div>
+</header>

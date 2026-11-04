@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Inventory · Tech Shop{% endblock %}
+{% block page_heading %}Inventory{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Stock levels and movement activity across the active catalogue.</p>{% endblock %}
+{% block content %}
+<div class="inv-actions">{% if is_manager %}<a class="btn inv-btn-primary" href="{% url 'products:receive' %}"><i class="bi bi-box-arrow-in-down"></i> Receive stock</a><a class="btn inv-btn-secondary" href="{% url 'products:history' %}"><i class="bi bi-clock-history"></i> Movement history</a><a class="btn inv-btn-secondary" href="{% url 'products:adjust' %}"><i class="bi bi-sliders"></i> Adjust stock</a>{% endif %}</div>
+<section class="inv-summary-grid" aria-label="Inventory summary">
+  <article class="summary-card inv-summary"><span class="inv-summary-icon blue"><i class="bi bi-box-seam"></i></span><span class="summary-label">Active products</span><strong class="summary-value">{{ active_products_count }}</strong><small>In the active catalogue</small></article>
+  <article class="summary-card inv-summary"><span class="inv-summary-icon green"><i class="bi bi-boxes"></i></span><span class="summary-label">Available units</span><strong class="summary-value">{{ available_units }}</strong><small>Total units currently in stock</small></article>
+  <article class="summary-card inv-summary"><span class="inv-summary-icon amber"><i class="bi bi-exclamation-triangle"></i></span><span class="summary-label">Low stock</span><strong class="summary-value">{{ low_stock_count }}</strong><small>Products below minimum stock level</small></article>
+  <article class="summary-card inv-summary"><span class="inv-summary-icon red"><i class="bi bi-box2"></i></span><span class="summary-label">Out of stock</span><strong class="summary-value">{{ out_of_stock_count }}</strong><small>Active products with no units</small></article>
+</section>
+<div class="inv-dashboard-grid">
+  <section class="panel-card inv-panel"><div class="inv-panel-heading"><div><h2>Low stock products</h2><p>Active items at or below their minimum level.</p></div><a href="{% url 'products:list' %}?status=active">View catalogue <i class="bi bi-arrow-right"></i></a></div>
+    <div class="inv-table-wrap"><table class="inv-table"><thead><tr><th>Product</th><th>SKU</th><th>Available</th><th>Minimum</th><th>Status</th></tr></thead><tbody>
+      {% for product in low_stock_products %}<tr><td><a class="inv-product-link" href="{% url 'products:detail' product.pk %}">{{ product.name }}</a></td><td>{{ product.sku }}</td><td>{{ product.stock_quantity }}</td><td>{{ product.minimum_stock_level }}</td><td>{% if product.stock_quantity == 0 %}<span class="inv-stock-badge out">Out of stock</span>{% else %}<span class="inv-stock-badge low">Low stock</span>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="5"><div class="inv-empty"><span class="empty-icon"><i class="bi bi-check2-circle"></i></span><strong>Stock levels look good</strong><p>No active products currently need restocking.</p></div></td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  {% if is_manager %}<section class="panel-card inv-panel"><div class="inv-panel-heading"><div><h2>Recent movements</h2><p>Latest changes recorded in inventory.</p></div><a href="{% url 'products:history' %}">Full history <i class="bi bi-arrow-right"></i></a></div>
+    <div class="inv-recent-list">{% for movement in recent_movements %}<a class="inv-recent-row" href="{% url 'products:detail' movement.product_id %}"><span class="inv-movement-icon"><i class="bi bi-arrow-left-right"></i></span><span class="inv-recent-copy"><strong>{{ movement.product.name }}</strong><small>{{ movement.get_movement_type_display }} · {{ movement.occurred_at|date:"M j, Y H:i" }}</small></span><b class="{% if movement.quantity > 0 %}positive{% else %}negative{% endif %}">{{ movement.quantity|stringformat:"+d" }}</b></a>{% empty %}<div class="inv-empty"><span class="empty-icon"><i class="bi bi-clock"></i></span><strong>No movements yet</strong><p>Stock activity will appear here once recorded.</p></div>{% endfor %}</div>
+  </section>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ title }}</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<body class="bg-light"><main class="container py-4" style="max-width: 700px">
+  <h1 class="h3">{{ title }}</h1><p>Payment {{ payment.pk }} for sale {{ payment.sale.reference }} · {{ payment.amount|floatformat:2 }} GHS · MTN reference {{ payment.momo_reference }}</p>
+  <form method="post" class="card card-body">{% csrf_token %}{{ form.as_p }}<div class="d-flex gap-2"><button class="btn btn-primary">{{ title }}</button><a class="btn btn-outline-secondary" href="{% url 'sales:receipt' payment.sale_id %}">Cancel</a></div></form>
+</main></body></html>

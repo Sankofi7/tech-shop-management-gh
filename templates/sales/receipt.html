@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Receipt {{ sale.reference }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>@media print {.no-print{display:none!important} body{background:white!important} main{max-width:100%!important}}</style>
+</head>
+<body class="bg-light">
+<main class="container py-4" style="max-width: 800px">
+  <div class="d-flex justify-content-between no-print mb-3">
+    <div class="d-flex flex-wrap gap-3">
+      <a href="{% url 'sales:history' %}">Sales history</a>
+      <a href="{% url 'sales:create' %}">Record another sale</a>
+    </div>
+    <button class="btn btn-outline-secondary" type="button" onclick="window.print()">Print receipt</button>
+  </div>
+  {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }} no-print">{{ message }}</div>{% endfor %}
+  <section class="card card-body">
+    <h1 class="h3 text-center">Tech Shop <small class="d-block fs-6 text-muted">(Shop name placeholder)</small></h1>
+    <hr>
+    <div class="row"><div class="col"><strong>Receipt:</strong> {{ sale.reference }}</div><div class="col text-end"><strong>Date:</strong> {{ sale.created_at|date:'Y-m-d H:i' }}</div></div>
+    <p class="mt-2 mb-1"><strong>Recorded by:</strong> {{ sale.created_by.get_full_name|default:sale.created_by.username }}</p>
+    {% if sale.customer %}<p><strong>Customer:</strong> {{ sale.customer_name_snapshot|default:sale.customer.full_name }} · {{ sale.customer_phone_snapshot|default:sale.customer.phone_number }}</p>{% endif %}
+    <p><strong>Sale type:</strong> {{ sale.get_sale_type_display }} · <strong>Status:</strong>
+      {% if sale.status == 'PENDING_APPROVAL' %}<span class="badge text-bg-warning">PENDING APPROVAL</span>
+      {% elif sale.status == 'REJECTED' %}<span class="badge text-bg-danger">REJECTED</span>
+      {% else %}<span class="badge text-bg-success">APPROVED</span>{% endif %}</p>
+    {% if sale.status == 'PENDING_APPROVAL' %}<div class="alert alert-warning">PENDING APPROVAL: this credit sale is excluded from approved sales and has not changed stock.</div>{% endif %}
+    {% if sale.status == 'REJECTED' %}<div class="alert alert-danger">REJECTED: {{ sale.rejection_reason }}</div>{% endif %}
+    <table class="table">
+      <thead><tr><th>Product</th><th>Qty</th><th>Unit price (GHS)</th><th class="text-end">Line total (GHS)</th></tr></thead>
+      <tbody>{% for item in sale.items.all %}
+        <tr><td>{{ item.product.name }}{% if item.units.exists %}<small class="d-block text-muted">Serial/IMEI: {% for unit in item.units.all %}{{ unit.identifier }}{% if not forloop.last %}, {% endif %}{% endfor %}</small>{% endif %}</td><td>{{ item.quantity }}</td><td>{{ item.unit_price|floatformat:2 }}</td><td class="text-end">{{ item.line_total|floatformat:2 }}</td></tr>
+      {% endfor %}</tbody>
+      <tfoot><tr><th colspan="3" class="text-end">Total</th><th class="text-end">{{ sale.total|floatformat:2 }}</th></tr></tfoot>
+    </table>
+    <h2 class="h6">Payments</h2>
+    {% if payments %}
+      <ul class="list-group mb-3">{% for payment in payments %}
+        <li class="list-group-item d-flex justify-content-between">
+          <span>{{ payment.get_method_display }} · {{ payment.amount|floatformat:2 }} GHS
+            {% if payment.method == 'MTN_MOMO' %}<small class="d-block">MTN ref: {{ payment.momo_reference }} · {% if payment.status == 'PENDING_CONFIRMATION' %}<span class="badge text-bg-warning">PENDING CONFIRMATION</span>{% elif payment.status == 'CONFIRMED' %}<span class="badge text-bg-success">CONFIRMED</span>{% else %}{{ payment.get_status_display }}{% endif %}{% if payment.confirmation_reference %} · confirmation: {{ payment.confirmation_reference }}{% endif %}</small>{% endif %}
+          </span><span>{{ payment.get_status_display }}</span>
+        </li>
+      {% endfor %}</ul>
+    {% else %}<p>No payments recorded.</p>{% endif %}
+    <div class="row"><div class="col">Confirmed amount paid</div><div class="col text-end">{{ sale.amount_paid|floatformat:2 }} GHS</div></div>
+    {% if sale.pending_momo_amount %}<div class="row text-warning"><div class="col">MTN awaiting confirmation (not counted as received)</div><div class="col text-end">{{ sale.pending_momo_amount|floatformat:2 }} GHS</div></div>{% endif %}
+    {% if sale.status == 'APPROVED' %}<div class="row fw-bold border-top pt-2"><div class="col">Outstanding balance</div><div class="col text-end">{{ sale.outstanding_balance|floatformat:2 }} GHS</div></div>{% endif %}
+  </section>
+  {% if sale.status == 'PENDING_APPROVAL' and user.role != 'EMPLOYEE' %}
+    <div class="d-flex gap-2 mt-3 no-print">
+      <form method="post" action="{% url 'sales:approve' sale.pk %}">{% csrf_token %}<button class="btn btn-success">Approve credit sale</button></form>
+      <a class="btn btn-outline-danger" href="{% url 'sales:reject' sale.pk %}">Reject</a>
+    </div>
+  {% endif %}
+  {% if sale.status == 'APPROVED' %}
+    <div class="d-flex flex-wrap gap-2 mt-3 no-print">
+      <a class="btn btn-primary" href="{% url 'sales:record_payment' sale.pk %}">Record payment</a>
+      {% if user.role != 'EMPLOYEE' %}{% for payment in payments %}{% if payment.status == 'PENDING_CONFIRMATION' %}<a class="btn btn-outline-success" href="{% url 'sales:confirm_payment' payment.pk %}">Confirm MTN payment</a><a class="btn btn-outline-danger" href="{% url 'sales:reject_payment' payment.pk %}">Reject MTN payment</a>{% endif %}{% endfor %}{% endif %}
+    </div>
+  {% endif %}
+</main>
+</body>
+</html>

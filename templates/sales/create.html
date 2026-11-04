@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Point of Sale · Tech Shop{% endblock %}
+{% block page_heading %}Point of Sale{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Build a cart, choose a customer and record the sale.</p>{% endblock %}
+
+{% block content %}
+<form method="post" class="pos-layout" id="pos-form" data-catalog-url="{% url 'sales:catalog' %}" data-units-url-template="{% url 'sales:available_units' 0 %}" data-is-manager="{{ is_manager|yesno:'true,false' }}" novalidate>
+  {% csrf_token %}
+  {{ header.submission_key }}
+  {{ lines_formset.management_form }}
+  <input type="hidden" id="id_payment_amount" name="payment_amount" value="">
+  <div class="pos-catalog-column">
+    <section class="pos-catalog panel-card" aria-labelledby="catalog-title">
+      <div class="pos-section-heading">
+        <div><h2 id="catalog-title">Product catalogue</h2><p>Search the active catalogue and add items to this sale.</p></div>
+        <span class="panel-icon"><i class="bi bi-grid"></i></span>
+      </div>
+      <div class="pos-search-row">
+        <label class="pos-search"><i class="bi bi-search" aria-hidden="true"></i><span class="visually-hidden">Search products</span><input type="search" id="product-search" placeholder="Search by product or SKU" autocomplete="off"><kbd>/</kbd></label>
+        <label class="visually-hidden" for="category-filter">Filter by category</label>
+        <select id="category-filter" class="form-select pos-category-filter"><option value="">All categories</option></select>
+      </div>
+      <div class="pos-result-count" id="catalog-count" aria-live="polite">Loading products…</div>
+      <div class="pos-product-grid" id="product-grid" aria-live="polite" aria-busy="true">
+        <div class="pos-loading"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Loading catalogue…</div>
+      </div>
+      <div class="pos-error" id="catalog-error" role="alert" hidden>Products could not be loaded. Check your connection and try again.</div>
+      <button class="btn btn-light pos-retry" id="catalog-retry" type="button" hidden>Try again</button>
+    </section>
+  </div>
+
+  <aside class="pos-checkout panel-card" aria-labelledby="cart-title">
+    <div class="pos-section-heading pos-cart-heading">
+      <div><h2 id="cart-title">Current sale</h2><p><span id="cart-item-count">0 items</span> in cart</p></div>
+      <span class="panel-icon"><i class="bi bi-bag"></i></span>
+    </div>
+    {% if has_checkout_errors %}
+      <div class="pos-server-errors" role="alert">
+        {% for error in header.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        {% for field in header %}{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}{% endfor %}
+        {% for error in lines_formset.non_form_errors %}<p>{{ error }}</p>{% endfor %}
+        {% for line_form in lines_formset %}{% for field in line_form %}{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}{% endfor %}{% endfor %}
+      </div>
+    {% endif %}
+    <div class="pos-cart-items" id="cart-items">
+      <div class="pos-cart-empty" id="cart-empty"><span class="empty-icon"><i class="bi bi-basket"></i></span><strong>Your cart is empty</strong><p>Add a product to begin this sale.</p></div>
+    </div>
+    <div class="pos-totals">
+      <div><span>Subtotal</span><strong id="pos-subtotal">GH₵0.00</strong></div>
+      <div class="pos-grand-total"><span>Total</span><strong id="pos-total">GH₵0.00</strong></div>
+      <p>No discounts or taxes applied.</p>
+    </div>
+
+    <div class="pos-checkout-fields">
+      <div class="pos-field-block">
+        <label class="form-label" for="id_sale_type">Sale type</label>
+        {{ header.sale_type }}
+        {% for error in header.sale_type.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="pos-field-block">
+        <label class="form-label" for="customer-search">Customer <span class="text-muted fw-normal">(required for credit)</span></label>
+        <input type="search" id="customer-search" class="form-control pos-customer-search" placeholder="Search active customers by name or phone" autocomplete="off">
+        <label class="visually-hidden" for="id_customer">Choose customer</label>
+        {{ header.customer }}
+        <div class="pos-selected-customer" id="selected-customer" aria-live="polite"></div>
+        {% for error in header.customer.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        <button class="pos-new-customer-toggle" id="new-customer-toggle" type="button" aria-expanded="false"><i class="bi bi-person-plus"></i> Register a new customer</button>
+        <div class="pos-new-customer" id="new-customer-fields" hidden>
+          <label class="form-label" for="id_new_customer_name">Full name</label>{{ header.new_customer_name }}
+          <label class="form-label" for="id_new_customer_phone">Phone number</label>{{ header.new_customer_phone }}
+          <details class="pos-optional-customer"><summary>Email or address (optional)</summary>{{ header.new_customer_email }}{{ header.new_customer_address }}</details>
+          {% for field in header %}{% if field.name == "new_customer_name" or field.name == "new_customer_phone" or field.name == "new_customer_email" or field.name == "new_customer_address" %}{% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}{% endif %}{% endfor %}
+          <button class="pos-cancel-customer" id="new-customer-cancel" type="button">Use an existing customer</button>
+        </div>
+      </div>
+
+      <div class="pos-payment-fields" id="payment-fields">
+        <div class="pos-field-block">
+          <label class="form-label" for="id_payment_method">Payment method</label>
+          {{ header.payment_method }}
+          {% for error in header.payment_method.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+        <div class="pos-field-block" id="momo-reference-field" hidden>
+          <label class="form-label" for="id_momo_reference">MTN MoMo transaction reference</label>
+          {{ header.momo_reference }}
+          <div class="pos-help-text">The reference is recorded for review. It does not confirm that MoMo payment was received.</div>
+          {% for error in header.momo_reference.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+      </div>
+      <div class="pos-checkout-note" id="checkout-note" aria-live="polite"></div>
+      <button class="btn pos-submit" type="submit" id="checkout-button" disabled><i class="bi bi-check2-circle"></i><span>Complete sale</span></button>
+      <a class="pos-history-link" href="{% url 'sales:history' %}"><i class="bi bi-clock-history"></i> View sales history</a>
+    </div>
+  </aside>
+</form>
+{{ cart_initial|json_script:"pos-cart-initial" }}
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'js/pos.js' %}" defer></script>{% endblock %}

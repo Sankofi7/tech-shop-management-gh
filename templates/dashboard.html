@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · Tech Shop{% endblock %}
+{% block page_heading %}Good {{ greeting }}, {{ user.first_name|default:user.username }}{% endblock %}
+{% block page_description %}
+  <p class="heading-subtitle">{% if is_manager %}Your live shop overview.{% else %}Your sales and the shop operations available to you.{% endif %}</p>
+{% endblock %}
+
+{% block content %}
+  <section class="summary-grid" aria-label="Business summary">
+    <article class="summary-card">
+      <div class="summary-icon icon-blue"><i class="bi bi-cash-stack"></i></div>
+      <div class="summary-label">{% if is_manager %}Sales today{% else %}Your sales today{% endif %}</div>
+      <div class="summary-value">GH₵{{ today_sales_total|floatformat:2 }}</div>
+      <div class="summary-note">{{ today_sales_count }} approved sale{{ today_sales_count|pluralize }} today</div>
+    </article>
+    <article class="summary-card">
+      <div class="summary-icon icon-violet"><i class="bi bi-person-lines-fill"></i></div>
+      <div class="summary-label">{% if is_manager %}Outstanding debt{% else %}Your outstanding credit{% endif %}</div>
+      <div class="summary-value">GH₵{{ outstanding_debt|floatformat:2 }}</div>
+      <div class="summary-note">Approved credit less confirmed payments</div>
+    </article>
+    <article class="summary-card">
+      <div class="summary-icon icon-amber"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="summary-label">Low stock</div>
+      <div class="summary-value">{{ low_stock_count }}</div>
+      <div class="summary-note">Active products at or below minimum</div>
+    </article>
+    <article class="summary-card">
+      <div class="summary-icon icon-green"><i class="bi bi-people"></i></div>
+      <div class="summary-label">Active customers</div>
+      <div class="summary-value">{{ active_customer_count }}</div>
+      <div class="summary-note">Active customer records</div>
+    </article>
+  </section>
+
+  <section class="panel-card performance-panel" aria-labelledby="sales-performance-title">
+    <div class="panel-header">
+      <div><h2 id="sales-performance-title">Sales performance</h2><p>{% if is_manager %}Approved sales over the last seven days{% else %}Your approved sales over the last seven days{% endif %}</p></div>
+      <span class="panel-icon"><i class="bi bi-bar-chart-line"></i></span>
+    </div>
+    <div class="chart-empty-note" {% if chart_has_sales %}hidden{% endif %}>No approved sales recorded during this seven-day period.</div>
+    <div class="sales-chart-wrap">
+      <svg class="sales-chart" id="sales-performance-chart" viewBox="0 0 720 250" role="img" aria-label="Approved sales chart for the last seven days"></svg>
+    </div>
+    <div class="chart-error" data-chart-error hidden>Sales chart could not be displayed.</div>
+    {{ chart_data|json_script:"sales-chart-data" }}
+  </section>
+
+  <section class="dashboard-grid dashboard-lower">
+    <article class="panel-card">
+      <div class="panel-header"><div><h2>Recent activity</h2><p>Latest recorded actions</p></div><span class="panel-icon"><i class="bi bi-activity"></i></span></div>
+      {% if recent_activity %}
+        <div class="activity-list">
+          {% for event in recent_activity %}
+            <div class="activity-row"><span class="activity-dot"></span><div class="activity-copy"><strong>{{ event.action_label }}</strong><span>{{ event.actor.get_full_name|default:event.actor.username }}</span></div><time datetime="{{ event.occurred_at|date:'c' }}">{{ event.occurred_at|date:"M j, H:i" }}</time></div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state"><span class="empty-icon"><i class="bi bi-journal-check"></i></span><strong>No recent activity yet</strong><p>Recorded shop activity will appear here.</p></div>
+      {% endif %}
+    </article>
+
+    <article class="panel-card" id="low-stock">
+      <div class="panel-header"><div><h2>Low stock alerts</h2><p>Products at or below their alert level</p></div><span class="panel-icon panel-icon-warning"><i class="bi bi-box-seam"></i></span></div>
+      {% if low_stock_products %}
+        <div class="stock-list">
+          {% for product in low_stock_products %}
+            <div class="stock-row"><div class="stock-product-icon"><i class="bi bi-box"></i></div><div class="stock-copy"><strong>{{ product.name }}</strong><span>SKU {{ product.sku }}</span></div><div class="stock-count"><strong>{{ product.stock_quantity }} available</strong><span>Minimum {{ product.minimum_stock_level }}</span><span class="low-stock-badge">Low stock</span></div></div>
+          {% endfor %}
+        </div>
+        {% if low_stock_count > 6 %}<p class="list-footnote">Showing 6 of {{ low_stock_count }} low-stock products.</p>{% endif %}
+      {% else %}
+        <div class="empty-state"><span class="empty-icon empty-icon-green"><i class="bi bi-check2-circle"></i></span><strong>No low-stock products</strong><p>All active products are above their alert levels.</p></div>
+      {% endif %}
+    </article>
+  </section>
+{% endblock %}
+
+{% load static %}
+{% block extra_js %}<script src="{% static 'js/dashboard-chart.js' %}" defer></script>{% endblock %}

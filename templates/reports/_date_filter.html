@@ -1,0 +1,8 @@
+<form method="get" class="report-filter-form">
+  <label>Period {{ form.period }}</label>
+  <label>From {{ form.date_from }}</label>
+  <label>To {{ form.date_to }}</label>
+  <button class="btn report-button-secondary" type="submit"><i class="bi bi-funnel"></i> Apply</button>
+  {% if csv_url %}<a class="btn report-button-secondary" href="{{ csv_url }}"><i class="bi bi-download"></i> Export CSV</a>{% endif %}
+</form>
+{% if form.errors %}<div class="report-form-error" role="alert">{{ form.non_field_errors }}{% if not form.non_field_errors %}Check the selected report dates.{% endif %}</div>{% endif %}
