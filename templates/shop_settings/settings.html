@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Settings · Tech Shop{% endblock %}
+{% block page_heading %}Shop Settings{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Business profile and dashboard notification preferences.{% if read_only %} You have read-only access.{% endif %}</p>{% endblock %}
+{% block content %}
+<form method="post" class="shop-settings-form">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="settings-layout">
+    <section class="panel-card settings-panel" aria-labelledby="shop-profile-heading">
+      <div class="panel-header"><div><h2 id="shop-profile-heading">Shop Profile</h2><p>Contact and location details for your business.</p></div><span class="panel-icon"><i class="bi bi-shop"></i></span></div>
+      <div class="settings-fields">
+        {% for field in form %}{% if field.name == "shop_name" or field.name == "contact_phone" or field.name == "business_email" or field.name == "physical_address" %}
+          <div class="settings-field {% if field.name == 'physical_address' %}settings-field-wide{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="settings-required">*</span>{% endif %}</label>
+            {{ field }}
+            {% if field.help_text %}<small class="settings-help">{{ field.help_text }}</small>{% endif %}
+            {% for error in field.errors %}<span class="settings-error">{{ error }}</span>{% endfor %}
+          </div>
+        {% endif %}{% endfor %}
+      </div>
+    </section>
+
+    <section class="panel-card settings-panel" aria-labelledby="notification-preferences-heading">
+      <div class="panel-header"><div><h2 id="notification-preferences-heading">Notification Preferences</h2><p>Choose which in-app dashboard alerts are shown.</p></div><span class="panel-icon panel-icon-warning"><i class="bi bi-bell"></i></span></div>
+      <div class="settings-preferences">
+        {% for field in form %}{% if field.name == "notify_low_stock" or field.name == "notify_pending_credit" or field.name == "notify_pending_momo" %}
+          <label class="settings-preference" for="{{ field.id_for_label }}"><span class="settings-preference-copy"><strong>{{ field.label }}</strong><small>{{ field.help_text }}</small></span>{{ field }}</label>
+          {% for error in field.errors %}<span class="settings-error">{{ error }}</span>{% endfor %}
+        {% endif %}{% endfor %}
+      </div>
+    </section>
+
+    <section class="panel-card settings-business-info" aria-labelledby="business-info-heading">
+      <span class="settings-info-icon"><i class="bi bi-currency-exchange"></i></span><div><h2 id="business-info-heading">Business Information</h2><p>Currency: <strong>GHS (GH₵)</strong></p><small>Dashboard notifications are in-app only. Email, SMS, push notifications and automatic MTN MoMo verification are not enabled.</small></div>
+    </section>
+  </div>
+  {% if not read_only %}<div class="settings-actions"><button class="inv-btn-primary" type="submit"><i class="bi bi-check2"></i> Save settings</button></div>{% endif %}
+</form>
+{% endblock %}

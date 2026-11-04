@@ -202,6 +202,36 @@ a { color: inherit; }
 .notification-item-count { display: grid; min-width: 24px; height: 24px; place-items: center; padding: 0 6px; border-radius: 8px; color: #376cc7; background: #edf4ff; font-size: 10px; font-weight: 700; }
 .notification-empty { margin: 0; padding: 14px 10px; color: #8793a4; font-size: 11px; text-align: center; }
 
+/* Shop settings */
+.settings-layout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; }
+.settings-panel { min-width: 0; min-height: 0; }
+.settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; padding-top: 18px; }
+.settings-field { min-width: 0; }
+.settings-field-wide { grid-column: 1 / -1; }
+.settings-field label { display: block; margin-bottom: 6px; color: #536176; font-size: 11px; font-weight: 650; }
+.settings-field .form-control { min-height: 40px; border-color: #e4eaf2; border-radius: 9px; font-size: 12px; }
+.settings-field .settings-textarea { min-height: 92px; resize: vertical; }
+.settings-required { margin-left: 3px; color: #c9575e; }
+.settings-help { display: block; margin-top: 5px; color: #96a1af; font-size: 10px; }
+.settings-error { display: block; margin-top: 5px; color: #b4454d; font-size: 10px; }
+.settings-preferences { display: grid; padding-top: 6px; }
+.settings-preference { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 75px; padding: 12px 2px; border-bottom: 1px solid #f0f2f6; cursor: pointer; }
+.settings-preference:last-child { border-bottom: 0; }
+.settings-preference-copy { display: flex; flex-direction: column; gap: 5px; }
+.settings-preference-copy strong { color: #39465a; font-size: 12px; font-weight: 650; }
+.settings-preference-copy small { max-width: 380px; color: #929dad; font-size: 10px; line-height: 1.5; }
+.settings-preference .form-check-input { flex: 0 0 2.2em; width: 2.2em; height: 1.2em; margin: 0; cursor: pointer; }
+.settings-preference .form-check-input:checked { border-color: var(--blue); background-color: var(--blue); }
+.settings-business-info { display: flex; grid-column: 1 / -1; align-items: flex-start; gap: 13px; min-height: 0; padding: 18px 20px; }
+.settings-info-icon { display: grid; flex: 0 0 38px; width: 38px; height: 38px; place-items: center; border-radius: 11px; color: #3478e6; background: #edf4ff; font-size: 17px; }
+.settings-business-info h2 { margin: 1px 0 5px; color: #2a3950; font-size: 13px; font-weight: 700; }
+.settings-business-info p { margin: 0 0 5px; color: #738197; font-size: 11px; }
+.settings-business-info p strong { color: #354b6a; }
+.settings-business-info small { color: #98a3b1; font-size: 10px; line-height: 1.5; }
+.settings-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.shop-settings-form input:disabled, .shop-settings-form textarea:disabled { color: #67768b; background: #f7f9fc; opacity: 1; }
+@media (max-width: 767.98px) { .settings-layout, .settings-fields { grid-template-columns: 1fr; } .settings-field-wide, .settings-business-info { grid-column: auto; } }
+
 /* Point of sale */
 .pos-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(350px, .85fr); align-items: start; gap: 18px; }
 .pos-catalog, .pos-checkout { min-width: 0; padding: 20px; }

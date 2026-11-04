@@ -20,12 +20,12 @@
       <div class="summary-value">GH₵{{ outstanding_debt|floatformat:2 }}</div>
       <div class="summary-note">Approved credit less confirmed payments</div>
     </article>
-    <article class="summary-card">
+    {% if low_stock_alert_enabled %}<article class="summary-card">
       <div class="summary-icon icon-amber"><i class="bi bi-exclamation-triangle"></i></div>
       <div class="summary-label">Low stock</div>
       <div class="summary-value">{{ low_stock_count }}</div>
       <div class="summary-note">Active products at or below minimum</div>
-    </article>
+    </article>{% endif %}
     <article class="summary-card">
       <div class="summary-icon icon-green"><i class="bi bi-people"></i></div>
       <div class="summary-label">Active customers</div>
@@ -61,7 +61,7 @@
       {% endif %}
     </article>
 
-    <article class="panel-card" id="low-stock">
+    {% if low_stock_alert_enabled %}<article class="panel-card" id="low-stock">
       <div class="panel-header"><div><h2>Low stock alerts</h2><p>Products at or below their alert level</p></div><span class="panel-icon panel-icon-warning"><i class="bi bi-box-seam"></i></span></div>
       {% if low_stock_products %}
         <div class="stock-list">
@@ -73,7 +73,7 @@
       {% else %}
         <div class="empty-state"><span class="empty-icon empty-icon-green"><i class="bi bi-check2-circle"></i></span><strong>No low-stock products</strong><p>All active products are above their alert levels.</p></div>
       {% endif %}
-    </article>
+    </article>{% endif %}
   </section>
 {% endblock %}
 

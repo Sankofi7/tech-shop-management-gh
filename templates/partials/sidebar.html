@@ -25,6 +25,7 @@
       <div class="sidebar-label">Management</div>
       <nav class="sidebar-nav">
         <a class="sidebar-link" href="{% url 'admin:audit_auditevent_changelist' %}"><i class="bi bi-shield-check"></i><span>Audit Logs</span></a>
+        <a class="sidebar-link {% if request.resolver_match.namespace == 'shop_settings' %}active{% endif %}" href="{% url 'shop_settings:settings' %}"><i class="bi bi-sliders"></i><span>Settings</span></a>
       </nav>
     {% endif %}
 
@@ -32,7 +33,6 @@
       <div class="sidebar-label">Administration</div>
       <nav class="sidebar-nav">
         <a class="sidebar-link {% if request.resolver_match.namespace == 'accounts' and request.resolver_match.url_name|slice:":5" == "staff" %}active{% endif %}" href="{% url 'accounts:staff_list' %}"><i class="bi bi-person-gear"></i><span>Staff Management</span></a>
-        <a class="sidebar-link is-placeholder" href="#" aria-disabled="true" title="Settings are coming soon"><i class="bi bi-sliders"></i><span>Settings</span><small>Soon</small></a>
       </nav>
     {% endif %}
   </div>

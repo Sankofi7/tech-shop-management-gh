@@ -14,6 +14,7 @@ from apps.audit.models import AuditEvent
 from apps.customers.models import Customer
 from apps.products.models import Product
 from apps.sales.models import Payment, PaymentStatus, Sale, SaleType
+from apps.shop_settings.models import ShopProfile
 
 
 SHOP_ROLES = (Role.OWNER, Role.SECRETARY, Role.EMPLOYEE)
@@ -41,6 +42,7 @@ def _sales_scope(user):
 def dashboard(request):
     user = request.user
     is_manager = user.role in MANAGER_ROLES
+    shop_profile = ShopProfile.get_solo()
     today = timezone.localdate()
     today_start, tomorrow_start = _local_day_range(today, today + timedelta(days=1))
     chart_start_day = today - timedelta(days=6)
@@ -75,13 +77,16 @@ def dashboard(request):
             "amount": str(daily_totals.get(day, ZERO_MONEY)),
         })
 
-    stock_query = Product.objects.filter(
-        is_active=True, stock_quantity__lte=F("minimum_stock_level")
-    )
-    low_stock_count = stock_query.count()
-    low_stock_products = stock_query.only(
-        "name", "sku", "stock_quantity", "minimum_stock_level"
-    ).order_by("stock_quantity", "name")[:6]
+    low_stock_count = None
+    low_stock_products = []
+    if shop_profile.notify_low_stock:
+        stock_query = Product.objects.filter(
+            is_active=True, stock_quantity__lte=F("minimum_stock_level")
+        )
+        low_stock_count = stock_query.count()
+        low_stock_products = stock_query.only(
+            "name", "sku", "stock_quantity", "minimum_stock_level"
+        ).order_by("stock_quantity", "name")[:6]
 
     activity = AuditEvent.objects.select_related("actor").only(
         "action", "occurred_at", "actor__username", "actor__first_name", "actor__last_name"
@@ -93,12 +98,14 @@ def dashboard(request):
         event.action_label = event.action.replace("_", " ").capitalize()
 
     active_customer_count = Customer.objects.filter(is_active=True).count()
-    notifications = dashboard_notifications(request)
+    notifications = dashboard_notifications(request, profile=shop_profile)
 
     hour = timezone.localtime().hour
     greeting = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
     return render(request, "dashboard.html", {
         "page_title": "Dashboard",
+        "shop_profile": shop_profile,
+        "low_stock_alert_enabled": shop_profile.notify_low_stock,
         "greeting": greeting,
         "recent_activity": recent_activity,
         "low_stock_products": low_stock_products,
