@@ -18,6 +18,7 @@ from apps.products.models import (
     UnitStatus,
 )
 from apps.products.services import record_stock_movement
+from apps.shop_settings.models import ShopProfile
 
 from .models import Payment, PaymentMethod, PaymentStatus, Sale, SaleItem, SaleStatus, SaleType
 from .services import (
@@ -288,6 +289,9 @@ class SalesWorkflowTests(TestCase):
             initial_payment={"amount": Decimal("5000.00"), "method": PaymentMethod.CASH},
         )
         other = User.objects.create_user(username="another-employee", password="unique-test-password", role=Role.EMPLOYEE)
+        other.first_name = "Avery"
+        other.last_name = "Staffmember"
+        other.save(update_fields=("first_name", "last_name"))
         self.client.force_login(other)
         response = self.client.get(f"/sales/{sale.pk}/receipt/")
         self.assertEqual(response.status_code, 404)
@@ -305,11 +309,160 @@ class SalesWorkflowTests(TestCase):
         self.assertContains(response, "PENDING APPROVAL")
         self.assertNotContains(response, "APPROVED</span>")
         response = self.client.get(
-            f"/sales/?search={self.product.sku}&product={self.product.pk}&payment_status=PAID"
+            f"/sales/?search={self.product.sku}&product={self.product.pk}&payment_status=CONFIRMED"
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, sale.reference)
         self.assertNotContains(response, other_employee_sale.reference)
+
+    def _cash_sale(self, *, user=None, method=PaymentMethod.CASH, reference=None, customer=None):
+        user = user or self.employee
+        suffix = reference or uuid.uuid4().hex[:10]
+        return create_sale(
+            user=user, sale_type=SaleType.CASH,
+            lines=[{"product": self.product, "quantity": 1}],
+            customer=customer,
+            initial_payment={
+                "amount": Decimal("5000.00"), "method": method,
+                "momo_reference": f"MOMO-{suffix}" if method == PaymentMethod.MTN_MOMO else "",
+            },
+        )
+
+    def test_sales_history_searches_customer_and_employee_display_name(self):
+        self._cash_sale(customer=self.customer)
+        self.employee.first_name = "Kofi"
+        self.employee.last_name = "Mensah"
+        self.employee.save(update_fields=("first_name", "last_name"))
+        self.client.force_login(self.owner)
+        for query in ("Sales Test Customer", "Kofi Mensah"):
+            response = self.client.get("/sales/", {"search": query})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.context["sales"]), 1)
+
+    def test_sales_history_sale_status_filters_are_distinct(self):
+        pending = create_sale(
+            user=self.employee, sale_type=SaleType.CREDIT, customer=self.customer,
+            lines=[{"product": self.product, "quantity": 1}],
+        )
+        approved = create_sale(
+            user=self.secretary, sale_type=SaleType.CREDIT, customer=self.customer,
+            lines=[{"product": self.product, "quantity": 1}],
+        )
+        rejected = create_sale(
+            user=self.employee, sale_type=SaleType.CREDIT, customer=self.customer,
+            lines=[{"product": self.product, "quantity": 1}],
+        )
+        reject_sale(sale=rejected, user=self.owner, reason="Credit terms not accepted")
+        self.client.force_login(self.owner)
+        for status, expected in (
+            (SaleStatus.PENDING_APPROVAL, pending),
+            (SaleStatus.APPROVED, approved),
+            (SaleStatus.REJECTED, rejected),
+        ):
+            response = self.client.get("/sales/", {"sale_status": status})
+            self.assertEqual([sale.pk for sale in response.context["sales"]], [expected.pk])
+
+    def test_sales_history_payment_method_status_and_combined_filters(self):
+        cash = self._cash_sale()
+        momo = self._cash_sale(method=PaymentMethod.MTN_MOMO)
+        credit = create_sale(
+            user=self.secretary, sale_type=SaleType.CREDIT, customer=self.customer,
+            lines=[{"product": self.product, "quantity": 1}],
+        )
+        repayment = record_payment(
+            sale=credit, user=self.secretary, amount=Decimal("500.00"), method=PaymentMethod.CASH,
+        )
+        rejected_credit = create_sale(
+            user=self.secretary, sale_type=SaleType.CREDIT, customer=self.customer,
+            lines=[{"product": self.product, "quantity": 1}],
+        )
+        rejected_payment = record_payment(
+            sale=rejected_credit, user=self.secretary, amount=Decimal("250.00"),
+            method=PaymentMethod.MTN_MOMO, momo_reference="MOMO-REJECTED-TEST",
+        )
+        reject_momo_payment(payment=rejected_payment, user=self.owner, reason="Reference not found")
+        self.client.force_login(self.owner)
+
+        cases = (
+            ({"payment_method": PaymentMethod.CASH}, {cash.pk, credit.pk}),
+            ({"payment_method": PaymentMethod.MTN_MOMO}, {momo.pk, rejected_credit.pk}),
+            ({"payment_status": PaymentStatus.CONFIRMED}, {cash.pk, credit.pk}),
+            ({"payment_status": PaymentStatus.PENDING_CONFIRMATION}, {momo.pk}),
+            ({"payment_status": PaymentStatus.REJECTED}, {rejected_credit.pk}),
+            ({"payment_method": PaymentMethod.CASH, "payment_status": PaymentStatus.CONFIRMED,
+              "sale_status": SaleStatus.APPROVED}, {cash.pk, credit.pk}),
+            ({"payment_method": PaymentMethod.MTN_MOMO, "payment_status": PaymentStatus.CONFIRMED}, set()),
+        )
+        for params, expected in cases:
+            response = self.client.get("/sales/", params)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual({sale.pk for sale in response.context["sales"]}, expected)
+        self.assertEqual(repayment.status, PaymentStatus.CONFIRMED)
+
+        pending_row = self.client.get("/sales/", {"search": momo.reference})
+        self.assertContains(pending_row, "MTN PENDING CONFIRMATION")
+
+    def test_sales_history_date_validation_preserves_other_filters(self):
+        sale = self._cash_sale()
+        self.client.force_login(self.owner)
+        response = self.client.get("/sales/", {
+            "date_from": "2026-02-31", "date_to": "2099-12-31",
+            "sale_status": SaleStatus.APPROVED,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a valid start date.")
+        self.assertContains(response, 'value="2026-02-31"')
+        self.assertContains(response, 'value="2099-12-31"')
+        self.assertEqual({item.pk for item in response.context["sales"]}, {sale.pk})
+
+        valid_end_filter = self.client.get("/sales/", {
+            "date_from": "2026-02-31", "date_to": "2000-01-01",
+            "sale_status": SaleStatus.APPROVED,
+        })
+        self.assertContains(valid_end_filter, "Enter a valid start date.")
+        self.assertEqual(list(valid_end_filter.context["sales"]), [])
+
+        reversed_dates = self.client.get("/sales/", {
+            "date_from": "2026-11-04", "date_to": "2026-11-03",
+            "sale_status": SaleStatus.APPROVED,
+        })
+        self.assertContains(reversed_dates, "End date must be on or after the start date.")
+        self.assertContains(reversed_dates, 'value="2026-11-04"')
+
+    def test_receipt_uses_configured_shop_name_or_generic_fallback_and_ghs(self):
+        sale = self._cash_sale()
+        self.client.force_login(self.employee)
+        fallback = self.client.get(f"/sales/{sale.pk}/receipt/")
+        self.assertContains(fallback, "Tech Shop")
+        self.assertContains(fallback, "GH₵5000.00")
+        self.assertNotContains(fallback, "shop name placeholder")
+
+        ShopProfile.objects.create(singleton_key=1, shop_name="Accra Device House")
+        configured = self.client.get(f"/sales/{sale.pk}/receipt/")
+        self.assertContains(configured, "Accra Device House")
+        self.assertContains(configured, "Unit price (GH₵)")
+        self.assertContains(configured, "Confirmed amount paid")
+
+    def test_employee_search_filters_and_direct_receipts_stay_scoped(self):
+        own_sale = self._cash_sale()
+        other = User.objects.create_user(
+            username="hidden-staff", password="unique-test-password", role=Role.EMPLOYEE,
+            first_name="Hidden", last_name="Employee",
+        )
+        other_sale = self._cash_sale(user=other)
+        self.client.force_login(self.employee)
+        for params in (
+            {"search": "Hidden Employee"},
+            {"employee": other.pk},
+            {"payment_status": PaymentStatus.CONFIRMED},
+            {"sale_status": SaleStatus.APPROVED},
+            {"payment_method": PaymentMethod.CASH},
+        ):
+            response = self.client.get("/sales/", params)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotContains(response, other_sale.reference)
+        self.assertContains(self.client.get("/sales/", {"search": own_sale.reference}), own_sale.reference)
+        self.assertEqual(self.client.get(f"/sales/{other_sale.pk}/receipt/").status_code, 404)
 
     def test_employee_records_sale_through_view_but_cannot_approve_pending_sale(self):
         self.client.force_login(self.employee)

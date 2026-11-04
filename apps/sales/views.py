@@ -4,8 +4,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
-from django.db.models import DecimalField, Exists, F, OuterRef, Q, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Exists, OuterRef, Q, Value
+from django.db.models.functions import Concat
 from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,14 +17,24 @@ from apps.accounts.permissions import role_required
 from apps.customers.models import Customer
 from apps.customers.services import create_customer
 from apps.products.models import Category, InventoryUnit, Product, UnitStatus
+from apps.shop_settings.models import ShopProfile
 
 from .forms import MomoConfirmationForm, PaymentForm, RejectionForm, SaleHeaderForm, SaleLineFormSet
-from .models import Payment, PaymentStatus, Sale, SaleItem, SaleStatus
+from .models import Payment, PaymentMethod, PaymentStatus, Sale, SaleItem, SaleStatus
 from .services import approve_sale, confirm_momo_payment, create_sale, record_payment, reject_momo_payment, reject_sale
 
 
 SHOP_ROLES = (Role.OWNER, Role.SECRETARY, Role.EMPLOYEE)
 MANAGER_ROLES = (Role.OWNER, Role.SECRETARY)
+
+
+def _parse_filter_date(raw_value):
+    if not raw_value:
+        return None
+    try:
+        return parse_date(raw_value)
+    except ValueError:
+        return None
 
 
 @login_required
@@ -35,12 +45,23 @@ def sales_history(request):
     if not is_manager:
         sales = sales.filter(created_by=request.user)
 
-    date_from = parse_date(request.GET.get("date_from", ""))
-    date_to = parse_date(request.GET.get("date_to", ""))
-    if date_from:
-        sales = sales.filter(created_at__date__gte=date_from)
-    if date_to:
-        sales = sales.filter(created_at__date__lte=date_to)
+    date_from_raw = request.GET.get("date_from", "").strip()
+    date_to_raw = request.GET.get("date_to", "").strip()
+    date_from = _parse_filter_date(date_from_raw)
+    date_to = _parse_filter_date(date_to_raw)
+    errors = []
+    if date_from_raw and date_from is None:
+        errors.append("Enter a valid start date.")
+    if date_to_raw and date_to is None:
+        errors.append("Enter a valid end date.")
+    reversed_date_range = bool(date_from and date_to and date_to < date_from)
+    if reversed_date_range:
+        errors.append("End date must be on or after the start date.")
+    else:
+        if date_from:
+            sales = sales.filter(created_at__date__gte=date_from)
+        if date_to:
+            sales = sales.filter(created_at__date__lte=date_to)
     employee_id = request.GET.get("employee", "")
     if is_manager and employee_id.isdigit():
         sales = sales.filter(created_by_id=int(employee_id))
@@ -50,33 +71,46 @@ def sales_history(request):
         sales = sales.filter(Exists(matching_product))
     search = request.GET.get("search", "").strip()
     if search:
+        sales = sales.annotate(
+            employee_display_name=Concat("created_by__first_name", Value(" "), "created_by__last_name"),
+        )
         matching_search_product = SaleItem.objects.filter(sale_id=OuterRef("pk")).filter(
             Q(product__name__icontains=search) | Q(product__sku__icontains=search)
         )
         sales = sales.filter(
             Q(reference__icontains=search)
             | Q(created_by__username__icontains=search)
+            | Q(created_by__first_name__icontains=search)
+            | Q(created_by__last_name__icontains=search)
+            | Q(employee_display_name__icontains=search)
+            | Q(customer_name_snapshot__icontains=search)
+            | Q(customer__full_name__icontains=search)
             | Exists(matching_search_product)
         )
+    sale_status = request.GET.get("sale_status", "")
+    if sale_status in SaleStatus.values:
+        sales = sales.filter(status=sale_status)
+    payment_method = request.GET.get("payment_method", "")
+    if payment_method in PaymentMethod.values:
+        sales = sales.filter(Exists(Payment.objects.filter(sale_id=OuterRef("pk"), method=payment_method)))
     payment_status = request.GET.get("payment_status", "")
-    sales = sales.annotate(
-        confirmed_paid=Coalesce(
-            Sum("payments__amount", filter=Q(payments__status=PaymentStatus.CONFIRMED)),
-            Value(0),
-            output_field=DecimalField(max_digits=12, decimal_places=2),
-        )
+    if payment_status in PaymentStatus.values:
+        matching_payments = Payment.objects.filter(sale_id=OuterRef("pk"), status=payment_status)
+        if payment_method in PaymentMethod.values:
+            matching_payments = matching_payments.filter(method=payment_method)
+        sales = sales.filter(Exists(matching_payments))
+
+    pending_momo = Payment.objects.filter(
+        sale_id=OuterRef("pk"), method=PaymentMethod.MTN_MOMO,
+        status=PaymentStatus.PENDING_CONFIRMATION,
     )
-    if payment_status == "PAID":
-        sales = sales.filter(status=SaleStatus.APPROVED, confirmed_paid__gte=F("total"))
-    elif payment_status == "PARTIAL":
-        sales = sales.filter(status=SaleStatus.APPROVED, confirmed_paid__gt=0, confirmed_paid__lt=F("total"))
-    elif payment_status == "UNPAID":
-        sales = sales.filter(status=SaleStatus.APPROVED, confirmed_paid=0)
-    elif payment_status == "PENDING_APPROVAL":
-        sales = sales.filter(status=SaleStatus.PENDING_APPROVAL)
-    elif payment_status == "PENDING_MOMO":
-        pending_payment = Payment.objects.filter(sale_id=OuterRef("pk"), status=PaymentStatus.PENDING_CONFIRMATION)
-        sales = sales.filter(Exists(pending_payment))
+    confirmed_payment = Payment.objects.filter(sale_id=OuterRef("pk"), status=PaymentStatus.CONFIRMED)
+    rejected_payment = Payment.objects.filter(sale_id=OuterRef("pk"), status=PaymentStatus.REJECTED)
+    sales = sales.annotate(
+        has_pending_momo=Exists(pending_momo),
+        has_confirmed_payment=Exists(confirmed_payment),
+        has_rejected_payment=Exists(rejected_payment),
+    )
 
     context = {
         "sales": sales,
@@ -84,6 +118,10 @@ def sales_history(request):
         "employees": Sale.objects.values("created_by_id", "created_by__username").distinct().order_by("created_by__username") if is_manager else (),
         "products": Product.objects.filter(is_active=True).order_by("name"),
         "filters": request.GET,
+        "errors": errors,
+        "sale_statuses": SaleStatus.choices,
+        "payment_methods": PaymentMethod.choices,
+        "payment_statuses": PaymentStatus.choices,
     }
     return render(request, "sales/history.html", context)
 
@@ -265,7 +303,11 @@ def sale_receipt(request, sale_id):
         ), pk=sale_id
     )
     _ensure_sale_visible(request.user, sale)
-    return render(request, "sales/receipt.html", {"sale": sale, "payments": sale.payments.all()})
+    profile = ShopProfile.get_solo()
+    shop_name = profile.shop_name.strip() or "Tech Shop"
+    return render(request, "sales/receipt.html", {
+        "sale": sale, "payments": sale.payments.all(), "shop_name": shop_name,
+    })
 
 
 @login_required
