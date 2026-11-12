@@ -42,7 +42,7 @@ ALLOWED_HOSTS = [
     for host in ALLOWED_HOSTS_VALUE.split(",")
     if host.strip()
 ]
-
+print("PRODUCTION SETTINGS LOADED - ALLOWED_HOSTS:", ALLOWED_HOSTS)
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in CSRF_ORIGINS_VALUE.split(",")
