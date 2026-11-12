@@ -23,7 +23,18 @@ def credit_totals(sales):
     total_paid = Payment.objects.filter(
         sale__in=credit_sales, status=PaymentStatus.CONFIRMED
     ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-    return credit_sales, total_sales, total_paid, total_sales - total_paid
+    from .ledger import customer_credit_ledger
+
+    visible_sale_ids = set(credit_sales.values_list("pk", flat=True))
+    visible_debt = Decimal("0.00")
+    for customer_id in set(credit_sales.order_by().values_list("customer_id", flat=True)):
+        customer = Customer.objects.get(pk=customer_id)
+        balances, _, _ = customer_credit_ledger(customer)
+        visible_debt += sum(
+            (balance for sale_id, balance in balances.items() if sale_id in visible_sale_ids),
+            Decimal("0.00"),
+        )
+    return credit_sales, total_sales, total_paid, visible_debt
 
 
 def _require_shop_user(user):

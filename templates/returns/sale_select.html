@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}New return or exchange · Tech Shop{% endblock %}
+{% block page_heading %}New return or exchange{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Choose the approved original sale before recording the customer’s request.</p>{% endblock %}
+{% block content %}
+<section class="panel-card return-panel">
+  <div class="return-panel-heading"><div><h2>Select original sale</h2><p>Only approved sales within the configured return period are listed.</p></div><a class="btn inv-btn-secondary" href="{% url 'returns:list' %}">Back to requests</a></div>
+  <form method="get" class="return-filter-form"><label class="return-search"><i class="bi bi-search"></i><span class="visually-hidden">Search eligible sales</span><input type="search" name="q" value="{{ query }}" placeholder="Sale reference or customer"></label><button class="btn inv-btn-secondary" type="submit">Search</button></form>
+  <div class="return-table-wrap"><table class="return-table"><thead><tr><th>Sale reference</th><th>Customer</th><th>Sale date</th><th>Recorded by</th><th>Available products</th><th>Return deadline</th><th></th></tr></thead><tbody>{% for row in sales %}<tr>
+    <td><strong>{{ row.sale.reference }}</strong></td><td>{% if row.sale.customer %}{{ row.sale.customer_name_snapshot|default:row.sale.customer.full_name }}{% else %}<span class="return-muted">Walk-in sale</span>{% endif %}</td><td>{{ row.sale.created_at|date:"d M Y" }}</td><td>{{ row.sale.created_by.get_full_name|default:row.sale.created_by.username }}</td>
+    <td>{% for line in row.items %}<small class="return-product-summary">{{ line.item.product.name }}: {{ line.remaining }} available</small>{% endfor %}</td><td>{{ row.deadline|date:"d M Y" }}</td><td><a class="btn inv-btn-primary btn-sm" href="{% url 'returns:request_create' row.sale.pk %}">Select</a></td>
+  </tr>{% empty %}<tr><td colspan="7"><div class="return-empty"><i class="bi bi-receipt"></i><strong>No eligible sales found</strong><p>Approved sales with remaining items will appear here during the return window.</p></div></td></tr>{% endfor %}</tbody></table></div>
+  {% if sales.has_other_pages %}<nav class="inv-pagination" aria-label="Eligible sale pages">{% if sales.has_previous %}<a href="?q={{ query|urlencode }}&page={{ sales.previous_page_number }}"><i class="bi bi-chevron-left"></i> Previous</a>{% endif %}<span>Page {{ sales.number }} of {{ sales.paginator.num_pages }}</span>{% if sales.has_next %}<a href="?q={{ query|urlencode }}&page={{ sales.next_page_number }}">Next <i class="bi bi-chevron-right"></i></a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}

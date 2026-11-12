@@ -92,7 +92,9 @@ class Sale(models.Model):
 
     @property
     def outstanding_balance(self):
-        return self.total - self.amount_paid
+        from apps.customers.ledger import sale_outstanding_balance
+
+        return sale_outstanding_balance(self)
 
     @property
     def pending_momo_amount(self):

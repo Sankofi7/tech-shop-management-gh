@@ -38,12 +38,12 @@
       <div class="summary-value">{{ low_stock_count }}</div>
       <div class="summary-note">Active products at or below minimum</div>
     </article>{% endif %}
-    <article class="summary-card">
+    {% if is_manager %}<article class="summary-card">
       <div class="summary-icon icon-green"><i class="bi bi-people"></i></div>
       <div class="summary-label">Active customers</div>
       <div class="summary-value">{{ active_customer_count }}</div>
       <div class="summary-note">Active customer records</div>
-    </article>
+    </article>{% endif %}
   </section>
 
   <section class="panel-card performance-panel" aria-labelledby="sales-performance-title">

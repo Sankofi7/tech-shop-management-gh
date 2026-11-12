@@ -189,3 +189,59 @@ class CustomerDebtTests(TestCase):
         response = self.client.get(f"/customers/repayments/{payment.pk}/receipt/")
         self.assertContains(response, "PENDING CONFIRMATION")
         self.assertContains(response, "GHS 5000.00")
+
+    def test_employee_customer_list_and_search_are_limited_to_own_sale_customers(self):
+        own_customer = self.customer
+        other_customer = create_customer(
+            user=self.secretary, full_name="Other Employee Customer", phone_number="0241234568",
+        )
+        own_sale = self.make_credit_sale(user=self.employee, customer=own_customer)
+        other_sale = self.make_credit_sale(user=self.other_employee, customer=other_customer)
+        approve_sale(sale=own_sale, user=self.secretary)
+        approve_sale(sale=other_sale, user=self.secretary)
+
+        self.client.force_login(self.employee)
+        response = self.client.get("/customers/")
+        self.assertContains(response, own_customer.full_name)
+        self.assertNotContains(response, other_customer.full_name)
+
+        search = self.client.get("/customers/", {"q": other_customer.phone_number})
+        self.assertNotContains(search, other_customer.full_name)
+
+    def test_employee_cannot_open_or_repay_unrelated_customer_but_can_use_own_customer(self):
+        other_customer = create_customer(
+            user=self.secretary, full_name="Unrelated Customer", phone_number="0241234568",
+        )
+        own_sale = self.make_credit_sale(user=self.employee, customer=self.customer)
+        other_sale = self.make_credit_sale(user=self.other_employee, customer=other_customer)
+        approve_sale(sale=own_sale, user=self.secretary)
+        approve_sale(sale=other_sale, user=self.secretary)
+
+        self.client.force_login(self.employee)
+        self.assertEqual(self.client.get(f"/customers/{other_customer.pk}/").status_code, 404)
+        self.assertEqual(self.client.get(f"/customers/{other_customer.pk}/repayments/new/").status_code, 404)
+
+        own_detail = self.client.get(f"/customers/{self.customer.pk}/")
+        self.assertEqual(own_detail.status_code, 200)
+        self.assertContains(own_detail, own_sale.reference)
+        self.assertNotContains(own_detail, other_sale.reference)
+        own_repayment = self.client.get(f"/customers/{self.customer.pk}/repayments/new/")
+        self.assertEqual(own_repayment.status_code, 200)
+        self.assertContains(own_repayment, own_sale.reference)
+        self.assertNotContains(own_repayment, other_sale.reference)
+
+    def test_managers_retain_customer_list_detail_and_repayment_access(self):
+        other_customer = create_customer(
+            user=self.secretary, full_name="Manager Visible Customer", phone_number="0241234568",
+        )
+        sale = self.make_credit_sale(user=self.other_employee, customer=other_customer)
+        approve_sale(sale=sale, user=self.secretary)
+
+        for manager in (self.owner, self.secretary):
+            self.client.force_login(manager)
+            listing = self.client.get("/customers/", {"q": other_customer.full_name})
+            self.assertContains(listing, other_customer.full_name)
+            self.assertEqual(self.client.get(f"/customers/{other_customer.pk}/").status_code, 200)
+            repayment = self.client.get(f"/customers/{other_customer.pk}/repayments/new/")
+            self.assertEqual(repayment.status_code, 200)
+            self.assertContains(repayment, sale.reference)

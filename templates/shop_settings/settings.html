@@ -31,6 +31,13 @@
       </div>
     </section>
 
+    <section class="panel-card settings-panel" aria-labelledby="returns-policy-heading">
+      <div class="panel-header"><div><h2 id="returns-policy-heading">Returns Policy</h2><p>Set the number of calendar days from the sale date when a return may be requested.</p></div><span class="panel-icon"><i class="bi bi-arrow-return-left"></i></span></div>
+      {% for field in form %}{% if field.name == "return_window_days" %}
+        <div class="settings-field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small class="settings-help">{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="settings-error">{{ error }}</span>{% endfor %}</div>
+      {% endif %}{% endfor %}
+    </section>
+
     <section class="panel-card settings-business-info" aria-labelledby="business-info-heading">
       <span class="settings-info-icon"><i class="bi bi-currency-exchange"></i></span><div><h2 id="business-info-heading">Business Information</h2><p>Currency: <strong>GHS (GH₵)</strong></p><small>Dashboard notifications are in-app only. Email, SMS, push notifications and automatic MTN MoMo verification are not enabled.</small></div>
     </section>

@@ -150,6 +150,29 @@ def record_stock_movement(
     return movement
 
 
+@transaction.atomic
+def quarantine_customer_return_units(*, product, unit_identifiers, user, unit_condition):
+    """Mark returned serialized units as non-sellable without inflating sellable stock."""
+    if not user.is_authenticated or user.role not in AUTHORIZED_STOCK_ROLES:
+        raise PermissionDenied("Only the owner or secretary can disposition returned inventory.")
+    locked_product = Product.objects.select_for_update().get(pk=getattr(product, "pk", product))
+    if not locked_product.track_individual_units:
+        raise ValidationError({"product": "Only individually tracked products have quarantined unit records."})
+    identifiers = [value.strip() for value in unit_identifiers if value and value.strip()]
+    if not identifiers or len(set(identifiers)) != len(identifiers):
+        raise ValidationError({"unit_identifiers": "Provide unique identifiers for every returned unit."})
+    if unit_condition not in UnitCondition.values:
+        raise ValidationError({"unit_condition": "Choose a valid unit condition."})
+    units = list(InventoryUnit.objects.select_for_update().filter(
+        product=locked_product, identifier__in=identifiers, status=UnitStatus.SOLD
+    ))
+    _require_all_units_found(units, identifiers)
+    InventoryUnit.objects.filter(pk__in=[unit.pk for unit in units]).update(
+        status=UnitStatus.QUARANTINED, condition=unit_condition
+    )
+    return units
+
+
 def _require_all_units_found(units, identifiers):
     if len(units) != len(identifiers):
         raise ValidationError({"unit_identifiers": "Each identifier must belong to this product and be in the required availability state."})

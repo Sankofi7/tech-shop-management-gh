@@ -446,6 +446,17 @@ class FrontendAuthenticationAndDashboardTests(TestCase):
         self.assertEqual(response.context["low_stock_count"], 1)
         self.assertEqual([product.sku for product in response.context["low_stock_products"]], [self.product.sku])
         self.assertEqual(response.context["active_customer_count"], 1)
+        self.assertContains(response, "Active customers")
+
+        self.client.force_login(self.secretary)
+        secretary_response = self.client.get("/")
+        self.assertEqual(secretary_response.context["active_customer_count"], 1)
+        self.assertContains(secretary_response, "Active customers")
+
+        self.client.force_login(self.employee)
+        employee_response = self.client.get("/")
+        self.assertIsNone(employee_response.context["active_customer_count"])
+        self.assertNotContains(employee_response, "Active customers")
 
     def test_seven_day_chart_has_zero_days_and_manager_and_employee_scopes(self):
         today = timezone.localtime()

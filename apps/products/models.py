@@ -109,6 +109,7 @@ class UnitStatus(models.TextChoices):
     SOLD = "SOLD", "Sold"
     SUPPLIER_RETURNED = "SUPPLIER_RETURNED", "Returned to supplier"
     ADJUSTED_OUT = "ADJUSTED_OUT", "Removed by adjustment"
+    QUARANTINED = "QUARANTINED", "Quarantined after customer return"
 
 
 class InventoryUnit(models.Model):

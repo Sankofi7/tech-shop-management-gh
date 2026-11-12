@@ -14,6 +14,7 @@
     <nav class="sidebar-nav">
       <a class="sidebar-link {% if request.resolver_match.namespace == 'sales' and request.resolver_match.url_name == 'create' %}active{% endif %}" href="{% url 'sales:create' %}"><i class="bi bi-receipt-cutoff"></i><span>Point of Sale</span></a>
       <a class="sidebar-link {% if request.resolver_match.namespace == 'sales' and request.resolver_match.url_name == 'history' %}active{% endif %}" href="{% url 'sales:history' %}"><i class="bi bi-clock-history"></i><span>Sales History</span></a>
+      <a class="sidebar-link {% if request.resolver_match.namespace == 'returns' %}active{% endif %}" href="{% url 'returns:list' %}"><i class="bi bi-arrow-left-right"></i><span>Returns</span></a>
       <a class="sidebar-link {% if request.resolver_match.namespace == 'customers' %}active{% endif %}" href="{% url 'customers:list' %}"><i class="bi bi-people"></i><span>Customers</span></a>
       <a class="sidebar-link {% if request.resolver_match.namespace == 'customers' and request.resolver_match.url_name == 'pending_momo' %}active{% endif %}" href="{% url 'customers:pending_momo' %}"><i class="bi bi-wallet2"></i><span>Payments</span></a>
       <a class="sidebar-link {% if request.resolver_match.namespace == 'products' and request.resolver_match.url_name != 'inventory' and request.resolver_match.url_name != 'receive' and request.resolver_match.url_name != 'adjust' and request.resolver_match.url_name != 'history' %}active{% endif %}" href="{% url 'products:list' %}"><i class="bi bi-box-seam"></i><span>Products</span></a>

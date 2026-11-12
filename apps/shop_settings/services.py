@@ -20,6 +20,7 @@ def update_shop_profile(*, actor, cleaned_data):
     editable_fields = (
         "shop_name", "contact_phone", "business_email", "physical_address",
         "notify_low_stock", "notify_pending_credit", "notify_pending_momo",
+        "return_window_days",
     )
     changed_fields = [field for field in editable_fields if getattr(profile, field) != cleaned_data[field]]
     if not created and not changed_fields:

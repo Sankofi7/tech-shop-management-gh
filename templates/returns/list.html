@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Returns & exchanges · Tech Shop{% endblock %}
+{% block page_heading %}Returns & exchanges{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Review submitted product returns and exchange requests.</p>{% endblock %}
+{% block content %}
+<section class="panel-card return-panel">
+  <div class="return-panel-heading"><div><h2>Returns workspace</h2><p>{{ returns.paginator.count }} request{{ returns.paginator.count|pluralize }} visible to you</p></div><a class="btn inv-btn-primary" href="{% url 'returns:request_select' %}"><i class="bi bi-plus-lg"></i> New request</a></div>
+  <form method="get" class="return-filter-form">
+    <label class="return-search"><i class="bi bi-search"></i><span class="visually-hidden">Search returns</span><input type="search" name="q" value="{{ filters.q }}" placeholder="Return, sale reference or customer"></label>
+    <select class="form-select" name="status"><option value="">All statuses</option>{% for value, label in return_statuses %}<option value="{{ value }}" {% if filters.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <select class="form-select" name="kind"><option value="">All types</option>{% for value, label in return_kinds %}<option value="{{ value }}" {% if filters.kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <button class="btn inv-btn-secondary" type="submit">Filter</button>
+  </form>
+  <div class="return-table-wrap"><table class="return-table"><thead><tr><th>Return reference</th><th>Original sale</th><th>Customer</th><th>Requested</th><th>Requested by</th><th>Type</th><th>Status</th><th class="text-end">Value</th><th></th></tr></thead><tbody>
+    {% for return_case in returns %}<tr>
+      <td><a class="return-reference" href="{% url 'returns:detail' return_case.pk %}">{{ return_case.reference }}</a></td>
+      <td>{{ return_case.sale.reference }}</td>
+      <td>{% if return_case.sale.customer %}{{ return_case.sale.customer_name_snapshot|default:return_case.sale.customer.full_name }}{% else %}<span class="return-muted">Walk-in sale</span>{% endif %}</td>
+      <td>{{ return_case.requested_at|date:"d M Y, H:i" }}</td>
+      <td>{{ return_case.requested_by.get_full_name|default:return_case.requested_by.username }}</td>
+      <td><span class="return-kind"><i class="bi {% if return_case.kind == 'EXCHANGE' %}bi-arrow-left-right{% else %}bi-arrow-return-left{% endif %}"></i>{{ return_case.get_kind_display }}</span></td>
+      <td><span class="return-status {{ return_case.status|lower }}">{{ return_case.get_status_display }}</span></td>
+      <td class="text-end">GH₵{{ return_case.total_value|floatformat:2 }}</td>
+      <td><a class="inv-row-action" href="{% url 'returns:detail' return_case.pk %}" aria-label="View {{ return_case.reference }}"><i class="bi bi-chevron-right"></i></a></td>
+    </tr>{% empty %}<tr><td colspan="9"><div class="return-empty"><i class="bi bi-arrow-return-left"></i><strong>No return requests found</strong><p>Try changing the filters, or submitted requests will appear here.</p></div></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if returns.has_other_pages %}<nav class="inv-pagination" aria-label="Return request pages">{% if returns.has_previous %}<a href="?q={{ filters.q|urlencode }}&status={{ filters.status }}&kind={{ filters.kind }}&page={{ returns.previous_page_number }}"><i class="bi bi-chevron-left"></i> Previous</a>{% endif %}<span>Page {{ returns.number }} of {{ returns.paginator.num_pages }}</span>{% if returns.has_next %}<a href="?q={{ filters.q|urlencode }}&status={{ filters.status }}&kind={{ filters.kind }}&page={{ returns.next_page_number }}">Next <i class="bi bi-chevron-right"></i></a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}

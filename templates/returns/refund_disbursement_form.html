@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Record refund disbursement · Tech Shop{% endblock %}
+{% block page_heading %}Record refund disbursement{% endblock %}
+{% block page_description %}<p class="heading-subtitle">{{ refund.reference }} · {{ return_case.reference }}</p>{% endblock %}
+{% block content %}
+<div class="return-request-layout">
+  <section class="panel-card return-panel">
+    <div class="return-panel-heading"><div><span class="return-reference">{{ refund.reference }}</span><h2>{{ refund.get_method_display }} refund</h2><p>Record the actual amount paid. This action is permanent.</p></div><span class="return-status {{ refund.status|lower }}">{{ refund.get_status_display }}</span></div>
+    <div class="return-info-grid">
+      <div><span>Original sale</span><strong>{{ return_case.sale.reference }}</strong></div>
+      <div><span>Recipient</span><strong>{% if return_case.sale.customer %}{{ return_case.sale.customer_name_snapshot|default:return_case.sale.customer.full_name }}{% else %}Walk-in customer{% endif %}</strong></div>
+      <div><span>Approved refund</span><strong>GH₵{{ refund.amount|floatformat:2 }}</strong></div>
+      <div><span>Available to record</span><strong>GH₵{{ remaining_amount|floatformat:2 }}</strong></div>
+    </div>
+    {% if refund.method == 'MTN_MOMO' %}<div class="return-manager-notice"><i class="bi bi-clock-history"></i><span>Entering an MTN MoMo reference records a pending disbursement. A different authorized manager must confirm it before it is treated as paid.</span></div>{% else %}<div class="return-manager-notice"><i class="bi bi-cash-stack"></i><span>Record only the cash actually handed to the customer.</span></div>{% endif %}
+    <form method="post" class="mt-4" novalidate>{% csrf_token %}{{ form.idempotency_key }}
+      {% if form.non_field_errors %}<div class="alert alert-danger">{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+      <div class="mb-3"><label class="form-label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>{{ form.amount }}{% for error in form.amount.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>
+      {% if form.momo_reference %}<div class="mb-3"><label class="form-label" for="{{ form.momo_reference.id_for_label }}">{{ form.momo_reference.label }}</label>{{ form.momo_reference }}{% for error in form.momo_reference.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% endif %}
+      <div class="d-flex flex-wrap gap-2"><button class="btn inv-btn-primary" type="submit" onclick="return confirm('Record this refund disbursement?');"><i class="bi bi-check2-circle"></i> Record disbursement</button><a class="btn btn-outline-secondary" href="{% url 'returns:detail' return_case.pk %}">Cancel</a></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

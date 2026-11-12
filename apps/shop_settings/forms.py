@@ -21,16 +21,19 @@ class ShopProfileForm(forms.ModelForm):
         fields = (
             "shop_name", "contact_phone", "business_email", "physical_address",
             "notify_low_stock", "notify_pending_credit", "notify_pending_momo",
+            "return_window_days",
         )
         labels = {
             "notify_low_stock": "Low-stock alerts",
             "notify_pending_credit": "Pending credit-sale approvals",
             "notify_pending_momo": "Pending MTN MoMo confirmations",
+            "return_window_days": "Return window (calendar days)",
         }
         help_texts = {
             "notify_low_stock": "Show low-stock alerts on the dashboard and in-app notification menu.",
             "notify_pending_credit": "Show credit sales waiting for owner or secretary approval.",
             "notify_pending_momo": "Show MTN MoMo payments waiting for manual confirmation.",
+            "return_window_days": "Number of calendar days from the sale date in which a return request can be submitted.",
         }
 
     def __init__(self, *args, read_only=False, **kwargs):

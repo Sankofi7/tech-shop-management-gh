@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}New return or exchange · Tech Shop{% endblock %}
+{% block page_heading %}New return or exchange{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Original sale {{ sale.reference }} · submit the request for manager approval.</p>{% endblock %}
+{% block content %}
+<form method="post" class="return-request-layout">{% csrf_token %}
+  <section class="panel-card return-panel return-request-main">
+    <div class="return-panel-heading"><div><h2>Items to return</h2><p>Select products and quantities from the original approved sale.</p></div><a class="btn inv-btn-secondary" href="{% url 'returns:request_select' %}">Choose another sale</a></div>
+    {% if form.non_field_errors %}<div class="return-form-errors">{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+    <div class="return-sale-summary"><div><span>Customer</span><strong>{% if sale.customer %}{{ sale.customer_name_snapshot|default:sale.customer.full_name }}{% else %}Walk-in sale{% endif %}</strong></div><div><span>Sale date</span><strong>{{ sale.created_at|date:"d M Y, H:i" }}</strong></div><div><span>Return deadline</span><strong>{{ return_deadline|date:"d M Y" }}</strong></div></div>
+    {% for line in sale_items %}<article class="return-request-item"><div class="return-request-product"><strong>{{ line.item.product.name }}</strong><span>{{ line.item.product.sku }} · Original price GH₵{{ line.item.unit_price|floatformat:2 }}</span><small>Purchased: {{ line.item.quantity }} · Available to request: {{ line.remaining }}</small></div><div class="return-request-input"><label for="{{ line.quantity_field.id_for_label }}">Quantity</label>{{ line.quantity_field }}{% for error in line.quantity_field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% if line.unit_field %}<div class="return-unit-options"><span>Serial number / IMEI</span>{{ line.unit_field }}{% for error in line.unit_field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div>{% endif %}</article>{% endfor %}
+  </section>
+  <aside class="return-request-side"><section class="panel-card return-panel return-side-card"><h2>Request information</h2><div class="mb-3"><label class="form-label" for="{{ form.kind.id_for_label }}">{{ form.kind.label }}</label>{{ form.kind }}{% for error in form.kind.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div><div><label class="form-label" for="{{ form.reason.id_for_label }}">{{ form.reason.label }}</label>{{ form.reason }}{% for error in form.reason.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div><button class="btn inv-btn-primary w-100 mt-3" type="submit"><i class="bi bi-send"></i> Submit request</button><p class="return-help">This request remains pending until an owner or secretary reviews it.</p></section></aside>
+</form>
+{% endblock %}

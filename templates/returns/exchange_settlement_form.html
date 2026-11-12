@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Settle exchange · Tech Shop{% endblock %}
+{% block page_heading %}Settle exchange{% endblock %}
+{% block page_description %}<p class="heading-subtitle">{{ return_case.reference }} · choose the approved replacement credit sale.</p>{% endblock %}
+{% block content %}
+<div class="return-request-layout">
+  <section class="panel-card return-panel">
+    <div class="return-panel-heading"><div><span class="return-reference">{{ return_case.reference }}</span><h2>Exchange credit settlement</h2><p>The original return credit is allocated to the selected replacement sale through the live customer ledger.</p></div><span class="return-status approved">Approved return</span></div>
+    <div class="return-info-grid">
+      <div><span>Original sale</span><strong>{{ return_case.sale.reference }}</strong></div>
+      <div><span>Customer</span><strong>{{ return_case.sale.customer_name_snapshot|default:return_case.sale.customer.full_name }}</strong></div>
+      <div><span>Approved return value</span><strong>GH₵{{ return_case.total_value|floatformat:2 }}</strong></div>
+      <div><span>Settlement method</span><strong>Replacement credit sale</strong></div>
+    </div>
+    <div class="return-manager-notice"><i class="bi bi-shield-check"></i><span>The selected sale must be an approved credit sale for this customer and must not have payments. The system checks these conditions again when you submit.</span></div>
+    <form method="post" class="mt-4" novalidate>{% csrf_token %}
+      {% if form.non_field_errors %}<div class="alert alert-danger">{% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}</div>{% endif %}
+      <div class="mb-3"><label class="form-label" for="{{ form.replacement_sale.id_for_label }}">{{ form.replacement_sale.label }}</label>{{ form.replacement_sale }}{% for error in form.replacement_sale.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}<div class="form-text">Only eligible replacement sales are shown. This does not send money to the customer.</div></div>
+      {% if not replacement_sales %}<div class="return-empty compact"><i class="bi bi-bag-x"></i><strong>No eligible replacement sales</strong><p>Create and approve a credit sale for this customer first. Do not record a payment before linking it to this exchange.</p></div>{% endif %}
+      <div class="d-flex flex-wrap gap-2 mt-3"><button class="btn inv-btn-primary" type="submit" {% if not replacement_sales %}disabled{% endif %} onclick="return confirm('Settle this exchange with the selected replacement sale?');"><i class="bi bi-arrow-left-right"></i> Link and settle exchange</button><a class="btn btn-outline-secondary" href="{% url 'returns:detail' return_case.pk %}">Cancel</a></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

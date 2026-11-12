@@ -4,8 +4,7 @@ import re
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import DecimalField, F, Q, Sum, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q, Sum
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -26,10 +25,18 @@ def _visible_sales(user, customer):
     return sales
 
 
+def _visible_customers(user):
+    """Return only customer records the current role may access."""
+    customers = Customer.objects.all()
+    if user.role == Role.EMPLOYEE:
+        customers = customers.filter(sales__created_by=user)
+    return customers.distinct()
+
+
 @login_required
 @role_required(*SHOP_ROLES)
 def customer_list(request):
-    customers = Customer.objects.all()
+    customers = _visible_customers(request.user)
     if request.user.role == Role.EMPLOYEE:
         customers = customers.filter(is_active=True)
     query = request.GET.get("q", "").strip()
@@ -52,6 +59,8 @@ def customer_create(request):
             data = {key: form.cleaned_data[key] for key in ("full_name", "phone_number", "email", "address")}
             customer = create_customer(user=request.user, **data)
             messages.success(request, f"Customer {customer.full_name} created.")
+            if request.user.role == Role.EMPLOYEE:
+                return redirect("customers:list")
             return redirect("customers:detail", customer_id=customer.pk)
         except (ValidationError, PermissionDenied) as exc:
             form.add_error(None, "; ".join(getattr(exc, "messages", [str(exc)])))
@@ -79,7 +88,7 @@ def customer_edit(request, customer_id):
 @login_required
 @role_required(*SHOP_ROLES)
 def customer_detail(request, customer_id):
-    customer = get_object_or_404(Customer, pk=customer_id)
+    customer = get_object_or_404(_visible_customers(request.user), pk=customer_id)
     sales = _visible_sales(request.user, customer)
     credit_sales, total_sales, total_paid, debt = credit_totals(sales)
     payments = Payment.objects.filter(sale__in=credit_sales).select_related("sale", "recorded_by", "decided_by")
@@ -99,17 +108,18 @@ def customer_detail(request, customer_id):
 @login_required
 @role_required(*SHOP_ROLES)
 def customer_repayment_new(request, customer_id):
-    customer = get_object_or_404(Customer, pk=customer_id, is_active=True)
-    sales = customer.sales.filter(sale_type=SaleType.CREDIT, status=SaleStatus.APPROVED)
+    customer = get_object_or_404(_visible_customers(request.user), pk=customer_id, is_active=True)
+    sales = customer.sales.filter(sale_type=SaleType.CREDIT, status=SaleStatus.APPROVED).select_related("customer")
     if request.user.role == Role.EMPLOYEE:
         sales = sales.filter(created_by=request.user)
-    sales = sales.annotate(
-        reserved_amount=Coalesce(
-            Sum("payments__amount", filter=~Q(payments__status=PaymentStatus.REJECTED)),
-            Value(Decimal("0.00")),
-            output_field=DecimalField(max_digits=12, decimal_places=2),
-        )
-    ).filter(reserved_amount__lt=F("total"))
+    collectible_ids = []
+    for sale in sales:
+        pending = sale.payments.filter(status=PaymentStatus.PENDING_CONFIRMATION).aggregate(
+            total=Sum("amount")
+        )["total"] or Decimal("0.00")
+        if sale.outstanding_balance > pending:
+            collectible_ids.append(sale.pk)
+    sales = sales.filter(pk__in=collectible_ids)
     form = RepaymentForm(request.POST or None, sales=sales)
     if request.method == "POST" and form.is_valid():
         sale = form.cleaned_data["sale"]

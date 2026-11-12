@@ -100,5 +100,33 @@ class Customer(models.Model):
         ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
 
     @property
+    def total_approved_credit_returns(self):
+        from apps.returns.models import ReturnItem, ReturnStatus
+        from apps.sales.models import SaleType
+        from django.db.models import DecimalField, ExpressionWrapper, F, Sum
+
+        return ReturnItem.objects.filter(
+            return_case__sale__customer=self,
+            return_case__sale__sale_type=SaleType.CREDIT,
+            return_case__status=ReturnStatus.APPROVED,
+        ).aggregate(
+            total=Sum(ExpressionWrapper(F("unit_price") * F("quantity"), output_field=DecimalField(max_digits=14, decimal_places=2)))
+        )["total"] or Decimal("0.00")
+
+    @property
+    def total_confirmed_credit_refunds(self):
+        from apps.returns.models import RefundDisbursement, RefundDisbursementStatus
+        from apps.sales.models import SaleType
+        from django.db.models import Sum
+
+        credit_sales = self.sales.filter(sale_type=SaleType.CREDIT)
+        return RefundDisbursement.objects.filter(
+            refund_request__return_case__sale__in=credit_sales,
+            status=RefundDisbursementStatus.CONFIRMED,
+        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+    @property
     def outstanding_debt(self):
-        return self.total_approved_credit_sales - self.total_confirmed_credit_payments
+        from .ledger import customer_credit_balance
+
+        return customer_credit_balance(self)

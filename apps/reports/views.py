@@ -12,6 +12,7 @@ from django.utils import timezone
 from apps.accounts.models import Role, User
 from apps.accounts.permissions import role_required
 from apps.audit.models import AuditEvent
+from apps.customers.ledger import customer_credit_ledger
 from apps.customers.models import Customer
 from apps.customers.services import MANAGER_ROLES, SHOP_ROLES, credit_totals
 from apps.products.models import InventoryMovement, MovementType, Product
@@ -21,6 +22,19 @@ from .forms import ReportDateForm
 
 
 ZERO = Decimal("0.00")
+
+
+def _settled_credit_sales(credit_sales):
+    """Return approved credit sales whose shared-ledger balance is settled."""
+    sales = list(credit_sales.select_related("customer", "created_by").order_by("-created_at"))
+    balances_by_customer = {
+        customer_id: customer_credit_ledger(Customer.objects.get(pk=customer_id))[0]
+        for customer_id in {sale.customer_id for sale in sales if sale.customer_id}
+    }
+    return [
+        sale for sale in sales
+        if sale.customer_id and balances_by_customer[sale.customer_id].get(sale.pk, ZERO) <= ZERO
+    ]
 
 
 def _sales_scope(user):
@@ -233,12 +247,7 @@ def credit_report(request):
         balance = customer.outstanding_debt
         if balance > 0:
             customers.append({"customer": customer, "balance": balance})
-    paid_sales = credit_sales.annotate(
-        confirmed_amount=Coalesce(
-            Sum("payments__amount", filter=Q(payments__status=PaymentStatus.CONFIRMED)),
-            Value(ZERO),
-        )
-    ).filter(confirmed_amount__gte=F("total"))
+    paid_sales = _settled_credit_sales(credit_sales)
     if request.GET.get("format") == "csv":
         rows = ((row["customer"].full_name, row["customer"].phone_number, row["balance"]) for row in customers)
         return _csv_download("outstanding-debt.csv", ("Customer", "Phone", "Outstanding balance GHS"), rows)
@@ -247,7 +256,7 @@ def credit_report(request):
         "credit_total": credit_total, "paid_total": paid_total, "outstanding": outstanding,
         "period_credit_total": period_credit_total, "period_paid": period_paid,
         "pending_count": pending_sales.count(), "pending_total": pending_sales.aggregate(total=Sum("total"))["total"] or ZERO,
-        "customers": customers[:100], "paid_sales": paid_sales.select_related("customer", "created_by").order_by("-created_at")[:50],
+        "customers": customers[:100], "paid_sales": paid_sales[:50],
         "is_manager": True, "csv_url": _csv_url(request),
     })
 

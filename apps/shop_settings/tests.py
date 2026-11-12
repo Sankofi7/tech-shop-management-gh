@@ -37,6 +37,7 @@ class ShopSettingsAccessTests(TestCase):
             "notify_low_stock": "on",
             "notify_pending_credit": "on",
             "notify_pending_momo": "on",
+            "return_window_days": "7",
         }
         data.update(overrides)
         return data
@@ -52,6 +53,7 @@ class ShopSettingsAccessTests(TestCase):
         profile = ShopProfile.objects.get(singleton_key=1)
         self.assertEqual(profile.shop_name, "Accra Tech Shop")
         self.assertTrue(profile.notify_low_stock)
+        self.assertEqual(profile.return_window_days, 7)
         self.assertEqual(ShopProfile.objects.count(), 1)
         created_event = AuditEvent.objects.get(action="SHOP_SETTINGS_CREATED")
         self.assertEqual(created_event.actor, self.owner)
@@ -67,6 +69,27 @@ class ShopSettingsAccessTests(TestCase):
         self.assertEqual(update_event.actor, self.owner)
         self.assertIn("shop_name", update_event.details["affected_settings"])
         self.assertEqual(ShopProfile.objects.count(), 1)
+
+        response = self.client.post("/settings/", self._payload(return_window_days="14"))
+        self.assertRedirects(response, "/settings/")
+        profile.refresh_from_db()
+        self.assertEqual(profile.return_window_days, 14)
+        policy_event = AuditEvent.objects.filter(action="SHOP_SETTINGS_UPDATED").order_by("-pk").first()
+        self.assertIn("return_window_days", policy_event.details["affected_settings"])
+
+    def test_only_owner_can_change_return_window_and_secretary_can_only_view(self):
+        self.client.force_login(self.secretary)
+        self.assertEqual(self.client.post("/settings/", self._payload(return_window_days="12")).status_code, 403)
+        self.client.force_login(self.employee)
+        self.assertEqual(self.client.post("/settings/", self._payload(return_window_days="12")).status_code, 403)
+        self.client.force_login(self.owner)
+        invalid = self.client.post("/settings/", self._payload(return_window_days="-1"))
+        self.assertEqual(invalid.status_code, 200)
+        self.assertContains(invalid, "return_window_days")
+        zero = self.client.post("/settings/", self._payload(return_window_days="0"))
+        self.assertEqual(zero.status_code, 200)
+        self.assertContains(zero, "return_window_days")
+        self.assertFalse(ShopProfile.objects.exists())
 
     def test_secretary_can_view_read_only_but_cannot_submit_changes(self):
         ShopProfile.objects.create(singleton_key=1, shop_name="Read Only Shop")
@@ -165,6 +188,7 @@ class DashboardPreferenceIntegrationTests(TestCase):
             "notify_low_stock": profile.notify_low_stock,
             "notify_pending_credit": profile.notify_pending_credit,
             "notify_pending_momo": profile.notify_pending_momo,
+            "return_window_days": profile.return_window_days,
         }
         for key, value in values.items():
             data[key] = "on" if value else ""

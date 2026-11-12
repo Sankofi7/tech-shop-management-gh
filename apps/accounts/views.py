@@ -101,7 +101,7 @@ def dashboard(request):
     for event in recent_activity:
         event.action_label = event.action.replace("_", " ").capitalize()
 
-    active_customer_count = Customer.objects.filter(is_active=True).count()
+    active_customer_count = Customer.objects.filter(is_active=True).count() if is_manager else None
     notifications = dashboard_notifications(request, profile=shop_profile)
 
     hour = timezone.localtime().hour

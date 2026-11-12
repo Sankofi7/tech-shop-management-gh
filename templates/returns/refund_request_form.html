@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Request refund · Tech Shop{% endblock %}
+{% block page_heading %}Request refund{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Submit a refund request for approved return {{ return_case.reference }}.</p>{% endblock %}
+{% block content %}
+<div class="return-request-layout">
+  <section class="panel-card return-panel return-request-main"><div class="return-panel-heading"><div><h2>Refund eligibility</h2><p>The amount is revalidated against the live customer ledger when submitted and approved.</p></div><a class="btn inv-btn-secondary" href="{% url 'returns:detail' return_case.pk %}">Back to return</a></div>
+    <div class="return-sale-summary"><div><span>Original sale</span><strong>{{ return_case.sale.reference }}</strong></div><div><span>Customer</span><strong>{% if return_case.sale.customer %}{{ return_case.sale.customer_name_snapshot|default:return_case.sale.customer.full_name }}{% else %}Walk-in sale{% endif %}</strong></div><div><span>Approved return value</span><strong>GH₵{{ return_case.total_value|floatformat:2 }}</strong></div><div><span>Currently refundable</span><strong class="return-money">GH₵{{ refundable_amount|floatformat:2 }}</strong></div></div>
+    <p class="return-help">An approved refund request reserves eligible funds. This stage does not send cash or MTN MoMo money to the customer.</p>
+  </section>
+  <aside class="return-request-side"><section class="panel-card return-panel return-side-card"><h2>Refund request</h2><form method="post">{% csrf_token %}{% for error in form.non_field_errors %}<div class="return-form-errors">{{ error }}</div>{% endfor %}<div class="mb-3"><label class="form-label" for="{{ form.amount.id_for_label }}">{{ form.amount.label }}</label>{{ form.amount }}{% for error in form.amount.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div><div class="mb-3"><label class="form-label" for="{{ form.method.id_for_label }}">{{ form.method.label }}</label>{{ form.method }}{% for error in form.method.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div><div><label class="form-label" for="{{ form.reason.id_for_label }}">{{ form.reason.label }}</label>{{ form.reason }}{% for error in form.reason.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}</div><button class="btn inv-btn-primary w-100 mt-3" type="submit"><i class="bi bi-send"></i> Submit refund request</button></form></section></aside>
+</div>
+{% endblock %}

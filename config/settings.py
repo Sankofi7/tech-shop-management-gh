@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.reports",
     "apps.shop_settings",
+    "apps.returns",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

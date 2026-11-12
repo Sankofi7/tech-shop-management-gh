@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Role
 from apps.audit.models import record_audit_event
+from apps.customers.models import Customer
 from apps.products.models import InventoryUnit, MovementType, Product, UnitStatus
 from apps.products.services import employee_sale_stock_context, record_stock_movement
 
@@ -126,8 +127,11 @@ def create_sale(*, user, sale_type, lines, initial_payment=None, customer=None, 
         raise ValidationError({"sale_type": "Choose cash or credit."})
     if sale_type == SaleType.CREDIT and customer is None:
         raise ValidationError({"customer": "A customer is required for every credit sale."})
-    if customer is not None and not customer.is_active:
-        raise ValidationError({"customer": "Choose an active customer."})
+    if customer is not None:
+        customer_id = getattr(customer, "pk", customer)
+        customer = Customer.objects.select_for_update().get(pk=customer_id)
+        if not customer.is_active:
+            raise ValidationError({"customer": "Choose an active customer."})
     lines = _normalise_lines(lines)
     product_ids = {line["product_id"] for line in lines}
     products = {
@@ -260,6 +264,9 @@ def _apply_sale_inventory(sale, items_and_lines, *, actor):
 def approve_sale(*, sale, user):
     _require_manager(user)
     sale_id = getattr(sale, "pk", sale)
+    sale_stub = Sale.objects.only("customer_id").get(pk=sale_id)
+    if sale_stub.customer_id:
+        Customer.objects.select_for_update().get(pk=sale_stub.customer_id)
     locked_sale = Sale.objects.select_for_update().get(pk=sale_id)
     if locked_sale.status != SaleStatus.PENDING_APPROVAL:
         raise ValidationError("Only pending sales can be approved.")
@@ -333,6 +340,9 @@ def reject_sale(*, sale, user, reason):
 def record_payment(*, sale, user, amount, method, momo_reference="", idempotency_key=None):
     _require_signed_in(user)
     sale_id = getattr(sale, "pk", sale)
+    sale_stub = Sale.objects.only("customer_id").get(pk=sale_id)
+    if sale_stub.customer_id:
+        Customer.objects.select_for_update().get(pk=sale_stub.customer_id)
     locked_sale = Sale.objects.select_for_update().get(pk=sale_id)
     if idempotency_key:
         existing = Payment.objects.filter(idempotency_key=str(idempotency_key)).first()
@@ -358,9 +368,18 @@ def record_payment(*, sale, user, amount, method, momo_reference="", idempotency
     if method == PaymentMethod.CASH and momo_reference:
         raise ValidationError({"momo_reference": "Cash payments do not use an MTN reference."})
 
-    reserved = locked_sale.payments.exclude(status=PaymentStatus.REJECTED).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-    if reserved + amount > locked_sale.total:
-        raise ValidationError({"amount": "Payment would exceed the sale's remaining confirmed and pending balance."})
+    current_balance = _sale_collectible_balance(locked_sale)
+    pending_reserved = locked_sale.payments.filter(status=PaymentStatus.PENDING_CONFIRMATION).aggregate(
+        total=Sum("amount")
+    )["total"] or Decimal("0.00")
+    if pending_reserved + amount > current_balance:
+        raise ValidationError({"amount": "Payment would exceed the current return-adjusted outstanding balance after pending confirmations."})
+    if locked_sale.sale_type == SaleType.CREDIT and locked_sale.customer_id:
+        from apps.customers.ledger import customer_credit_balance
+
+        customer_pending = _pending_customer_credit_payments(locked_sale.customer)
+        if customer_pending + amount > customer_credit_balance(locked_sale.customer):
+            raise ValidationError({"amount": "Pending MoMo confirmations already reserve this customer's remaining approved credit debt."})
 
     now = timezone.now()
     status = PaymentStatus.CONFIRMED if method == PaymentMethod.CASH else PaymentStatus.PENDING_CONFIRMATION
@@ -405,12 +424,32 @@ def record_payment(*, sale, user, amount, method, momo_reference="", idempotency
 def confirm_momo_payment(*, payment, user, confirmation_reference):
     _require_manager(user)
     payment_id = getattr(payment, "pk", payment)
-    locked_payment = Payment.objects.select_for_update().select_related("sale").get(pk=payment_id)
+    payment_stub = Payment.objects.select_related("sale").only("sale_id", "sale__customer_id").get(pk=payment_id)
+    if payment_stub.sale.customer_id:
+        Customer.objects.select_for_update().get(pk=payment_stub.sale.customer_id)
+    locked_sale = Sale.objects.select_for_update().get(pk=payment_stub.sale_id)
+    locked_payment = Payment.objects.select_for_update().get(pk=payment_id)
     if locked_payment.method != PaymentMethod.MTN_MOMO or locked_payment.status != PaymentStatus.PENDING_CONFIRMATION:
         raise ValidationError("Only pending MTN Mobile Money payments can be confirmed.")
     confirmation_reference = (confirmation_reference or "").strip()
     if not confirmation_reference:
         raise ValidationError({"confirmation_reference": "Record a transaction confirmation reference."})
+    if locked_sale.status != SaleStatus.APPROVED:
+        raise ValidationError("Payments can be confirmed only for approved sales.")
+    current_balance = _sale_collectible_balance(locked_sale)
+    other_pending = Payment.objects.filter(
+        sale=locked_sale, status=PaymentStatus.PENDING_CONFIRMATION,
+    ).exclude(pk=locked_payment.pk).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    if locked_payment.amount + other_pending > current_balance:
+        raise ValidationError("The return-adjusted balance changed. Do not confirm this MoMo payment; ask a manager to review or reject it.")
+    if locked_sale.sale_type == SaleType.CREDIT and locked_sale.customer_id:
+        from apps.customers.ledger import customer_credit_balance
+
+        customer_pending = _pending_customer_credit_payments(
+            locked_sale.customer, exclude_payment_id=locked_payment.pk,
+        )
+        if locked_payment.amount + customer_pending > customer_credit_balance(locked_sale.customer):
+            raise ValidationError("The customer's return-adjusted debt no longer supports this MoMo payment. Ask a manager to review or reject it.")
     now = timezone.now()
     with _allow_payment_mutations():
         Payment.objects.filter(pk=locked_payment.pk).update(
@@ -435,7 +474,11 @@ def reject_momo_payment(*, payment, user, reason):
     _require_manager(user)
     reason = _reason(reason, action="reject a payment confirmation")
     payment_id = getattr(payment, "pk", payment)
-    locked_payment = Payment.objects.select_for_update().select_related("sale").get(pk=payment_id)
+    payment_stub = Payment.objects.select_related("sale").only("sale_id", "sale__customer_id").get(pk=payment_id)
+    if payment_stub.sale.customer_id:
+        Customer.objects.select_for_update().get(pk=payment_stub.sale.customer_id)
+    Sale.objects.select_for_update().get(pk=payment_stub.sale_id)
+    locked_payment = Payment.objects.select_for_update().get(pk=payment_id)
     if locked_payment.method != PaymentMethod.MTN_MOMO or locked_payment.status != PaymentStatus.PENDING_CONFIRMATION:
         raise ValidationError("Only pending MTN Mobile Money payments can be rejected.")
     now = timezone.now()
@@ -458,3 +501,24 @@ def _require_manager(user):
     _require_signed_in(user)
     if not _manager(user):
         raise PermissionDenied("Only the owner or secretary can approve or reject this action.")
+
+
+def _lock_customer_credit_ledger(sale):
+    if sale.customer_id:
+        Customer.objects.select_for_update().get(pk=sale.customer_id)
+
+
+def _sale_collectible_balance(sale):
+    from apps.customers.ledger import sale_outstanding_balance
+
+    return sale_outstanding_balance(sale)
+
+
+def _pending_customer_credit_payments(customer, *, exclude_payment_id=None):
+    pending = Payment.objects.filter(
+        sale__customer=customer, sale__sale_type=SaleType.CREDIT,
+        sale__status=SaleStatus.APPROVED, status=PaymentStatus.PENDING_CONFIRMATION,
+    )
+    if exclude_payment_id is not None:
+        pending = pending.exclude(pk=exclude_payment_id)
+    return pending.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")

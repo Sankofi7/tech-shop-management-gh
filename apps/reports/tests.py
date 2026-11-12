@@ -12,6 +12,8 @@ from apps.products.models import Category, InventoryMovement, MovementType, Prod
 from apps.products.services import record_stock_movement
 from apps.sales.models import Payment, PaymentMethod, PaymentStatus, SaleStatus, SaleType
 from apps.sales.services import approve_sale, confirm_momo_payment, create_sale, record_payment, reject_sale
+from apps.returns.models import ReturnCondition, ReturnDisposition, ReturnStatus
+from apps.returns.services import approve_return_request, create_return_request
 
 
 User = get_user_model()
@@ -188,6 +190,39 @@ class ReportsTests(TestCase):
         self.assertNotEqual(partial.status, SaleStatus.PENDING_APPROVAL)
         self.assertEqual(pending.status, SaleStatus.PENDING_APPROVAL)
         self.assertEqual(self.client.get("/reports/credit/", {"format": "csv"}).status_code, 200)
+
+    def test_credit_report_uses_shared_ledger_for_return_credit_settlement(self):
+        fully_returned = create_sale(
+            user=self.secretary, sale_type=SaleType.CREDIT, customer=self.customer,
+            lines=[{"product": self.product, "quantity": 1}],
+        )
+        partially_returned = create_sale(
+            user=self.secretary, sale_type=SaleType.CREDIT, customer=self.customer,
+            lines=[{"product": self.product, "quantity": 2}],
+        )
+        for sale, quantity in ((fully_returned, 1), (partially_returned, 1)):
+            return_case = create_return_request(
+                sale=sale, user=self.secretary, reason="Customer returned the product.",
+                items=[{"sale_item": sale.items.get(), "quantity": quantity}],
+            )
+            approved_return = approve_return_request(
+                return_case=return_case, user=self.owner,
+                item_decisions={
+                    return_case.items.get().pk: {
+                        "condition": ReturnCondition.GOOD,
+                        "disposition": ReturnDisposition.RESTOCK,
+                    }
+                },
+            )
+            self.assertEqual(approved_return.status, ReturnStatus.APPROVED)
+
+        self.assertEqual(fully_returned.outstanding_balance, Decimal("0.00"))
+        self.assertEqual(partially_returned.outstanding_balance, Decimal("5000.00"))
+        self.client.force_login(self.owner)
+        response = self.client.get("/reports/credit/")
+        paid_sales = list(response.context["paid_sales"])
+        self.assertIn(fully_returned, paid_sales)
+        self.assertNotIn(partially_returned, paid_sales)
 
     def test_inventory_report_uses_current_products_and_period_movements(self):
         record_stock_movement(

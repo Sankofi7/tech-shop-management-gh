@@ -3,6 +3,7 @@ from contextvars import ContextVar
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -38,6 +39,7 @@ class ShopProfile(models.Model):
     notify_low_stock = models.BooleanField(default=True)
     notify_pending_credit = models.BooleanField(default=True)
     notify_pending_momo = models.BooleanField(default=True)
+    return_window_days = models.PositiveSmallIntegerField(default=7, validators=[MinValueValidator(1)])
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
