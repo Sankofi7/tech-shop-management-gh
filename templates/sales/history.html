@@ -1,46 +1,12 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sales history</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
-<main class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3">Sales history</h1>
-    <a class="btn btn-primary" href="{% url 'sales:create' %}">Record sale</a>
-  </div>
-  {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}
-  {% for error in errors %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endfor %}
-  <form method="get" class="card card-body mb-3">
-    <div class="row g-2">
-      <div class="col"><label class="form-label">From</label><input class="form-control" type="date" name="date_from" value="{{ filters.date_from }}"></div>
-      <div class="col"><label class="form-label">To</label><input class="form-control" type="date" name="date_to" value="{{ filters.date_to }}"></div>
-      <div class="col"><label class="form-label">Search</label><input class="form-control" name="search" value="{{ filters.search }}" placeholder="Reference, customer, product, employee"></div>
-      {% if is_manager %}<div class="col"><label class="form-label">Employee</label><select class="form-select" name="employee"><option value="">All</option>{% for employee in employees %}<option value="{{ employee.created_by_id }}" {% if filters.employee == employee.created_by_id|stringformat:'s' %}selected{% endif %}>{{ employee.created_by__username }}</option>{% endfor %}</select></div>{% endif %}
-      <div class="col"><label class="form-label">Product</label><select class="form-select" name="product"><option value="">All</option>{% for product in products %}<option value="{{ product.pk }}" {% if filters.product == product.pk|stringformat:'s' %}selected{% endif %}>{{ product.name }}</option>{% endfor %}</select></div>
-      <div class="col"><label class="form-label">Sale status</label><select class="form-select" name="sale_status"><option value="">All</option>{% for value, label in sale_statuses %}<option value="{{ value }}" {% if filters.sale_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-      <div class="col"><label class="form-label">Payment method</label><select class="form-select" name="payment_method"><option value="">All</option>{% for value, label in payment_methods %}<option value="{{ value }}" {% if filters.payment_method == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-      <div class="col"><label class="form-label">Payment status</label><select class="form-select" name="payment_status"><option value="">All</option>{% for value, label in payment_statuses %}<option value="{{ value }}" {% if filters.payment_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-      <div class="col-auto align-self-end"><button class="btn btn-outline-primary">Filter</button></div>
-    </div>
-  </form>
-  <div class="table-responsive bg-white rounded shadow-sm">
-    <table class="table table-striped mb-0">
-      <thead><tr><th>Reference</th><th>Date</th><th>Employee</th><th>Customer</th><th>Sale type</th><th>Sale status</th><th>Payment status</th><th>Total (GH₵)</th><th>Confirmed paid (GH₵)</th><th>Balance (GH₵)</th><th></th></tr></thead>
-      <tbody>{% for sale in sales %}
-        <tr>
-          <td>{{ sale.reference }}</td><td>{{ sale.created_at|date:'Y-m-d H:i' }}</td><td>{{ sale.created_by.username }}</td><td>{{ sale.customer_name_snapshot|default:"—" }}</td>
-          <td>{{ sale.get_sale_type_display }}</td><td>{% if sale.status == 'PENDING_APPROVAL' %}<span class="badge text-bg-warning">PENDING APPROVAL</span>{% elif sale.status == 'REJECTED' %}<span class="badge text-bg-danger">REJECTED</span>{% else %}<span class="badge text-bg-success">APPROVED</span>{% endif %}</td>
-          <td>{% if sale.has_pending_momo %}<span class="badge text-bg-warning">MTN PENDING CONFIRMATION</span>{% endif %}{% if sale.has_confirmed_payment %}<span class="badge text-bg-success">CONFIRMED PAYMENT</span>{% endif %}{% if sale.has_rejected_payment %}<span class="badge text-bg-danger">MTN REJECTED</span>{% endif %}{% if not sale.has_pending_momo and not sale.has_confirmed_payment and not sale.has_rejected_payment %}<span class="text-muted">No payments</span>{% endif %}</td>
-          <td>GH₵{{ sale.total|floatformat:2 }}</td><td>GH₵{{ sale.amount_paid|floatformat:2 }}</td><td>{% if sale.status == 'APPROVED' and sale.sale_type == 'CREDIT' %}GH₵{{ sale.outstanding_balance|floatformat:2 }}{% else %}—{% endif %}</td>
-          <td><a href="{% url 'sales:receipt' sale.pk %}">Receipt</a></td>
-        </tr>
-      {% empty %}<tr><td colspan="11" class="text-center py-4">No sales match these filters.</td></tr>{% endfor %}</tbody>
-    </table>
-  </div>
-</main>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Sales History · 1ST POINT TECH HUB{% endblock %}
+{% block page_heading %}Sales History{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Search and review sales available to your role.</p>{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-end mb-3"><a class="btn btn-primary" href="{% url 'sales:create' %}">Record sale</a></div>
+{% for error in errors %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endfor %}
+<form method="get" class="card card-body mb-3"><div class="row g-2"><div class="col"><label class="form-label">From</label><input class="form-control" type="date" name="date_from" value="{{ filters.date_from }}"></div><div class="col"><label class="form-label">To</label><input class="form-control" type="date" name="date_to" value="{{ filters.date_to }}"></div><div class="col"><label class="form-label">Search</label><input class="form-control" name="search" value="{{ filters.search }}" placeholder="Reference, customer, product, employee"></div>{% if is_manager %}<div class="col"><label class="form-label">Employee</label><select class="form-select" name="employee"><option value="">All</option>{% for employee in employees %}<option value="{{ employee.created_by_id }}" {% if filters.employee == employee.created_by_id|stringformat:'s' %}selected{% endif %}>{{ employee.created_by__username }}</option>{% endfor %}</select></div>{% endif %}<div class="col"><label class="form-label">Product</label><select class="form-select" name="product"><option value="">All</option>{% for product in products %}<option value="{{ product.pk }}" {% if filters.product == product.pk|stringformat:'s' %}selected{% endif %}>{{ product.name }}</option>{% endfor %}</select></div><div class="col"><label class="form-label">Sale status</label><select class="form-select" name="sale_status"><option value="">All</option>{% for value, label in sale_statuses %}<option value="{{ value }}" {% if filters.sale_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div class="col"><label class="form-label">Payment method</label><select class="form-select" name="payment_method"><option value="">All</option>{% for value, label in payment_methods %}<option value="{{ value }}" {% if filters.payment_method == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div class="col"><label class="form-label">Payment status</label><select class="form-select" name="payment_status"><option value="">All</option>{% for value, label in payment_statuses %}<option value="{{ value }}" {% if filters.payment_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div><div class="col-auto align-self-end"><button class="btn btn-outline-primary">Filter</button></div></div></form>
+<div class="table-responsive bg-white rounded shadow-sm"><table class="table table-striped mb-0"><thead><tr><th>Reference</th><th>Date</th><th>Employee</th><th>Customer</th><th>Sale type</th><th>Sale status</th><th>Payment status</th><th>Total (GH₵)</th><th>Confirmed paid (GH₵)</th><th>Balance (GH₵)</th><th></th></tr></thead><tbody>{% for sale in sales %}<tr><td>{{ sale.reference }}</td><td>{{ sale.created_at|date:'Y-m-d H:i' }}</td><td>{{ sale.created_by.username }}</td><td>{{ sale.customer_name_snapshot|default:"—" }}</td><td>{{ sale.get_sale_type_display }}</td><td>{% if sale.status == 'PENDING_APPROVAL' %}<span class="badge text-bg-warning">PENDING APPROVAL</span>{% elif sale.status == 'REJECTED' %}<span class="badge text-bg-danger">REJECTED</span>{% else %}<span class="badge text-bg-success">APPROVED</span>{% endif %}</td><td>{% if sale.has_pending_momo %}<span class="badge text-bg-warning">MTN PENDING CONFIRMATION</span>{% endif %}{% if sale.has_confirmed_payment %}<span class="badge text-bg-success">CONFIRMED PAYMENT</span>{% endif %}{% if sale.has_rejected_payment %}<span class="badge text-bg-danger">MTN REJECTED</span>{% endif %}{% if not sale.has_pending_momo and not sale.has_confirmed_payment and not sale.has_rejected_payment %}<span class="text-muted">No payments</span>{% endif %}</td><td>GH₵{{ sale.total|floatformat:2 }}</td><td>GH₵{{ sale.amount_paid|floatformat:2 }}</td><td>{% if sale.status == 'APPROVED' and sale.sale_type == 'CREDIT' %}GH₵{{ sale.outstanding_balance|floatformat:2 }}{% else %}—{% endif %}</td><td><a href="{% url 'sales:receipt' sale.pk %}">Receipt</a></td></tr>{% empty %}<tr><td colspan="11" class="text-center py-4">No sales match these filters.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

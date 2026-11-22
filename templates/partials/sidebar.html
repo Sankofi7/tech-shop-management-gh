@@ -1,7 +1,7 @@
 <aside class="app-sidebar" id="app-sidebar" aria-label="Main navigation">
   <div class="sidebar-brand">
     <div class="brand-mark"><i class="bi bi-controller"></i></div>
-    <div class="brand-copy"><span>TECH<span class="brand-accent">SHOP</span></span><small>Management system</small></div>
+    <div class="brand-copy"><span>1ST <span class="brand-accent">POINT</span></span><small>TECH HUB</small></div>
     <button class="sidebar-close" type="button" aria-label="Close navigation" data-sidebar-close><i class="bi bi-x-lg"></i></button>
   </div>
   <div class="sidebar-scroll">
@@ -25,7 +25,7 @@
     {% if user.role == 'OWNER' or user.role == 'SECRETARY' %}
       <div class="sidebar-label">Management</div>
       <nav class="sidebar-nav">
-        <a class="sidebar-link" href="{% url 'admin:audit_auditevent_changelist' %}"><i class="bi bi-shield-check"></i><span>Audit Logs</span></a>
+        <a class="sidebar-link {% if request.resolver_match.namespace == 'audit' %}active{% endif %}" href="{% url 'audit:list' %}"><i class="bi bi-shield-check"></i><span>Audit Logs</span></a>
         <a class="sidebar-link {% if request.resolver_match.namespace == 'shop_settings' %}active{% endif %}" href="{% url 'shop_settings:settings' %}"><i class="bi bi-sliders"></i><span>Settings</span></a>
       </nav>
     {% endif %}

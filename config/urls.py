@@ -11,6 +11,7 @@ urlpatterns = []
 urlpatterns.append(path("accounts/login/", LoginView.as_view(template_name="accounts/login.html"), name="login"))
 urlpatterns.append(path("accounts/logout/", LogoutView.as_view(), name="logout"))
 urlpatterns.append(path("accounts/", include("apps.accounts.urls")))
+urlpatterns.append(path("audit/", include("apps.audit.urls")))
 urlpatterns.append(path("settings/", include("apps.shop_settings.urls")))
 urlpatterns.append(path("", dashboard, name="dashboard"))
 urlpatterns.append(path("customers/", include("apps.customers.urls")))

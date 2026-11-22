@@ -304,7 +304,7 @@ def sale_receipt(request, sale_id):
     )
     _ensure_sale_visible(request.user, sale)
     profile = ShopProfile.get_solo()
-    shop_name = profile.shop_name.strip() or "Tech Shop"
+    shop_name = profile.shop_name.strip() or "1ST POINT TECH HUB"
     return render(request, "sales/receipt.html", {
         "sale": sale, "payments": sale.payments.all(), "shop_name": shop_name,
     })

@@ -1,4 +1,4 @@
-# Tech Shop Management System
+# 1ST POINT TECH HUB Management System
 
 Django application for a Ghanaian shop selling gaming consoles, controllers,
 accessories, laptops, and phones. Monetary amounts are recorded in Ghana cedis

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Logs · 1ST POINT TECH HUB{% endblock %}
+{% block page_heading %}Audit Logs{% endblock %}
+{% block page_description %}<p class="heading-subtitle">Protected, read-only history of important application activity.</p>{% endblock %}
+
+{% block content %}
+<section class="panel-card" style="min-height: 0; padding: 0; overflow: hidden;">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead><tr><th>When</th><th>Action</th><th>Responsible user</th><th>Affected record</th></tr></thead>
+      <tbody>{% for event in events %}
+        <tr><td>{{ event.occurred_at|date:"M j, Y H:i" }}</td><td>{{ event.action|title }}</td><td>{{ event.actor.get_full_name|default:event.actor.username }}</td><td>{{ event.object_type|title }} · {{ event.object_reference }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="text-center text-muted py-4">No audit activity has been recorded yet.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% if events.has_other_pages %}<nav class="d-flex justify-content-between align-items-center p-3" aria-label="Audit log pages">{% if events.has_previous %}<a href="?page={{ events.previous_page_number }}">Previous</a>{% else %}<span></span>{% endif %}<span class="text-muted small">Page {{ events.number }} of {{ events.paginator.num_pages }}</span>{% if events.has_next %}<a href="?page={{ events.next_page_number }}">Next</a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}

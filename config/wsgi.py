@@ -1,4 +1,4 @@
-"""WSGI config for the Tech Shop Management System scaffold."""
+"""WSGI config for the 1ST POINT TECH HUB Management System."""
 import os
 
 from django.core.wsgi import get_wsgi_application

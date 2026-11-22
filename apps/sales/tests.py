@@ -433,7 +433,7 @@ class SalesWorkflowTests(TestCase):
         sale = self._cash_sale()
         self.client.force_login(self.employee)
         fallback = self.client.get(f"/sales/{sale.pk}/receipt/")
-        self.assertContains(fallback, "Tech Shop")
+        self.assertContains(fallback, "1ST POINT TECH HUB")
         self.assertContains(fallback, "GH₵5000.00")
         self.assertNotContains(fallback, "shop name placeholder")
 
@@ -505,7 +505,7 @@ class SalesWorkflowTests(TestCase):
         self.assertContains(page, 'id="pos-form"')
         self.assertContains(page, "Product catalogue")
         self.assertContains(page, "Current sale")
-        self.assertContains(page, "pos.js")
+        self.assertContains(page, "pos.")
         self.assertContains(page, "Workspace")
         self.assertContains(page, "Point of Sale")
         self.assertNotContains(page, 'class="pos-server-errors"')

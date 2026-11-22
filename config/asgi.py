@@ -1,4 +1,4 @@
-"""ASGI config for the Tech Shop Management System scaffold."""
+"""ASGI config for the 1ST POINT TECH HUB Management System."""
 import os
 
 from django.core.asgi import get_asgi_application

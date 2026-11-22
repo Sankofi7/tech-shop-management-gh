@@ -1,8 +1,8 @@
-# Tech Shop Management System — Project Instructions
+# 1ST POINT TECH HUB Management System — Project Instructions
 
 ## 1. Project Overview
 
-This is a Django-based Tech Shop Management System for a shop selling gaming consoles, gaming accessories, controllers, laptops, phones, and related accessories.
+This is a Django-based 1ST POINT TECH HUB Management System for a shop selling gaming consoles, gaming accessories, controllers, laptops, phones, and related accessories.
 
 The system uses:
 

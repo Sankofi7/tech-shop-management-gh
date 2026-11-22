@@ -12,6 +12,7 @@ from apps.accounts.models import Role
 from apps.accounts.permissions import role_required
 from apps.sales.models import Payment, PaymentStatus, Sale, SaleStatus, SaleType
 from apps.sales.services import record_payment
+from apps.shop_settings.models import ShopProfile
 
 from .forms import CustomerForm, RepaymentForm
 from .models import Customer
@@ -144,7 +145,12 @@ def repayment_receipt(request, payment_id):
         raise Http404
     if request.user.role == Role.EMPLOYEE and payment.sale.created_by_id != request.user.pk:
         raise Http404
-    return render(request, "customers/repayment_receipt.html", {"payment": payment, "sale": payment.sale, "customer": payment.sale.customer})
+    profile = ShopProfile.get_solo()
+    shop_name = profile.shop_name.strip() or "1ST POINT TECH HUB"
+    return render(request, "customers/repayment_receipt.html", {
+        "payment": payment, "sale": payment.sale, "customer": payment.sale.customer,
+        "shop_name": shop_name,
+    })
 
 
 @login_required
